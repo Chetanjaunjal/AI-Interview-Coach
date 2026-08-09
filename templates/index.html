@@ -35,6 +35,31 @@
             </div>
         </section>
 
+        <section class="resume-upload" id="upload-resume">
+            <p class="eyebrow">Start with your experience</p>
+            <h2>Upload Your Resume</h2>
+            <p class="upload-instructions">
+                Choose your resume as a PDF so we can use it for your future practice sessions.
+            </p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages" aria-live="polite">
+                        {% for category, message in messages %}
+                            <p class="flash-message {{ category }}">{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form class="upload-form" action="{{ url_for('upload_resume') }}" method="post" enctype="multipart/form-data">
+                <label for="resume">Resume PDF</label>
+                <input id="resume" name="resume" type="file" accept=".pdf,application/pdf">
+                <button class="primary-button" type="submit">Upload Resume</button>
+                <p class="file-limit">Maximum file size: 5 MB</p>
+            </form>
+        </section>
+
         <section class="how-it-works" id="how-it-works">
             <p class="eyebrow">Your practice room</p>
             <h2>Make every answer a little stronger.</h2>

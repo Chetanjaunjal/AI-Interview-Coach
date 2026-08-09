@@ -146,6 +146,74 @@ h1 span {
     line-height: 1.35;
 }
 
+.resume-upload {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 80px 32px;
+    border-top: 1px solid var(--line);
+}
+
+.upload-instructions {
+    max-width: 560px;
+    margin: 24px 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.upload-form {
+    display: grid;
+    max-width: 560px;
+    gap: 14px;
+    margin-top: 36px;
+}
+
+.upload-form label {
+    font-weight: 700;
+}
+
+.upload-form input[type="file"] {
+    padding: 14px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.upload-form .primary-button {
+    width: fit-content;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.file-limit {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.flash-messages {
+    max-width: 560px;
+    margin-top: 28px;
+}
+
+.flash-message {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+.flash-message.success {
+    color: #245b4d;
+    background: #dcefe9;
+}
+
+.flash-message.error {
+    color: #8d3428;
+    background: #f9dfd9;
+}
+
 .how-it-works {
     max-width: 1180px;
     margin: 0 auto;
@@ -216,6 +284,10 @@ footer {
 
     .how-it-works {
         padding: 80px 20px 90px;
+    }
+
+    .resume-upload {
+        padding: 70px 20px 80px;
     }
 
     .feature-row {

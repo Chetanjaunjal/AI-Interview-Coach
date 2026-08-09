@@ -1,6 +1,55 @@
-from flask import Flask, render_template
+import os
+
+from flask import Flask, flash, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
+
+
+@app.errorhandler(413)
+def file_too_large(error):
+    """Show a useful message when Flask rejects an oversized request."""
+    flash("The resume is too large. Please choose a PDF smaller than 5 MB.", "error")
+    return redirect(url_for("home"))
+
+
+@app.route("/upload-resume", methods=["POST"])
+def upload_resume():
+    uploaded_file = request.files.get("resume")
+
+    if uploaded_file is None:
+        flash("Please choose a PDF resume before uploading.", "error")
+        return redirect(url_for("home"))
+
+    if not uploaded_file.filename:
+        flash("Please choose a PDF resume before uploading.", "error")
+        return redirect(url_for("home"))
+
+    if not uploaded_file.filename.lower().endswith(".pdf"):
+        flash("Only PDF files are allowed.", "error")
+        return redirect(url_for("home"))
+
+    safe_filename = secure_filename(uploaded_file.filename)
+    if not safe_filename or not safe_filename.lower().endswith(".pdf"):
+        flash("That filename is not valid. Please rename the PDF and try again.", "error")
+        return redirect(url_for("home"))
+
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    save_path = os.path.join(app.config["UPLOAD_FOLDER"], safe_filename)
+    name, extension = os.path.splitext(safe_filename)
+    counter = 1
+    while os.path.exists(save_path):
+        save_path = os.path.join(
+            app.config["UPLOAD_FOLDER"], f"{name}_{counter}{extension}"
+        )
+        counter += 1
+
+    uploaded_file.save(save_path)
+    flash("Resume uploaded successfully.", "success")
+    return redirect(url_for("home"))
 
 
 @app.route("/")
