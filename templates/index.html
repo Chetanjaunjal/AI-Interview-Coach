@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Interview Coach helps you build confidence for your next interview.">
+    <title>AI Interview Coach</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
+        <nav aria-label="Main navigation">
+            <a href="#how-it-works">How It Works</a>
+            <a class="nav-cta" href="#start">Start Interview</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero" id="start">
+            <div class="hero-copy">
+                <p class="eyebrow">Prepare with purpose</p>
+                <h1>Walk into your next interview with <span>clarity.</span></h1>
+                <p class="hero-description">
+                    AI Interview Coach gives you a focused space to practice, reflect, and build confidence one answer at a time.
+                </p>
+                <a class="primary-button" href="#how-it-works">Start Interview <span aria-hidden="true">&rarr;</span></a>
+            </div>
+            <div class="hero-note" aria-label="Practice reminder">
+                <span class="note-number">01</span>
+                <p>Good preparation is not about having every answer. It is about knowing how to think through the question.</p>
+            </div>
+        </section>
+
+        <section class="how-it-works" id="how-it-works">
+            <p class="eyebrow">Your practice room</p>
+            <h2>Make every answer a little stronger.</h2>
+            <div class="feature-row">
+                <article>
+                    <span>01</span>
+                    <h3>Choose your direction</h3>
+                    <p>Focus your preparation on the role and interview style that matter to you.</p>
+                </article>
+                <article>
+                    <span>02</span>
+                    <h3>Practice out loud</h3>
+                    <p>Work through thoughtful questions in a calm, low-pressure environment.</p>
+                </article>
+                <article>
+                    <span>03</span>
+                    <h3>Keep improving</h3>
+                    <p>Turn each practice session into momentum for the next one.</p>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; <span id="current-year"></span> AI Interview Coach</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
