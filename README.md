@@ -4,12 +4,13 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 
 ## Current Features
 
-- Basic landing page for AI Interview Coach
-- Simple navigation and project introduction
-- Flask route that renders the landing page
-- Responsive HTML and CSS foundation
-- PDF resume uploads saved in the `uploads/` directory
-- Upload validation for filenames, PDF extensions, and a 5 MB size limit
+- Flask application
+- Resume PDF upload
+- PDF validation
+- 5 MB upload limit
+- Secure filename handling
+- PDF text extraction
+- Extracted text preview
 
 ## Planned Features
 
@@ -66,6 +67,7 @@ Then open http://127.0.0.1:5000/ in your browser.
 ## Resume Upload
 
 On the home page, choose a PDF smaller than 5 MB and select **Upload Resume**.
-Valid files are saved locally in `uploads/`. This commit stores the file only;
-resume text extraction, AI analysis, authentication, and database storage are
-planned for later commits.
+Valid files are saved locally in `uploads/`. After saving, `pypdf` opens the PDF,
+loops through its pages, extracts readable text from each page, and combines the
+results for a preview on the page. Image-only PDFs do not contain selectable text,
+so they show a message explaining that OCR may be needed in a future commit.

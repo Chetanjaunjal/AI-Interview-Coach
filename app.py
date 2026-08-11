@@ -1,12 +1,36 @@
 import os
 
 from flask import Flask, flash, redirect, render_template, request, url_for
+from pypdf import PdfReader
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
+
+
+def extract_text_from_pdf(file_path):
+    """Extract readable text from every page in a PDF file."""
+    try:
+        reader = PdfReader(file_path)
+
+        if reader.is_encrypted:
+            return ""
+    except Exception:
+        return ""
+
+    extracted_pages = []
+    for page in reader.pages:
+        try:
+            page_text = page.extract_text()
+        except Exception:
+            page_text = ""
+
+        if page_text and page_text.strip():
+            extracted_pages.append(page_text.strip())
+
+    return "\n\n".join(extracted_pages)
 
 
 @app.errorhandler(413)
@@ -48,8 +72,9 @@ def upload_resume():
         counter += 1
 
     uploaded_file.save(save_path)
+    extracted_text = extract_text_from_pdf(save_path)
     flash("Resume uploaded successfully.", "success")
-    return redirect(url_for("home"))
+    return render_template("index.html", extracted_text=extracted_text)
 
 
 @app.route("/")

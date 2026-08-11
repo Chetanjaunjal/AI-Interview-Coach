@@ -56,8 +56,22 @@
                 <label for="resume">Resume PDF</label>
                 <input id="resume" name="resume" type="file" accept=".pdf,application/pdf">
                 <button class="primary-button" type="submit">Upload Resume</button>
-                <p class="file-limit">Maximum file size: 6 MB</p>
+                <p class="file-limit">Maximum file size: 5 MB</p>
             </form>
+
+            {% if extracted_text is defined %}
+                <section class="extracted-text" aria-labelledby="extracted-text-heading">
+                    <p class="eyebrow">Resume content</p>
+                    <h3 id="extracted-text-heading">Extracted Resume Text</h3>
+                    {% if extracted_text %}
+                        <pre>{{ extracted_text }}</pre>
+                    {% else %}
+                        <p class="extraction-message">
+                            Could not extract readable text from this PDF. The resume may contain scanned images.
+                        </p>
+                    {% endif %}
+                </section>
+            {% endif %}
         </section>
 
         <section class="how-it-works" id="how-it-works">
