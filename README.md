@@ -10,9 +10,12 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - 5 MB upload limit
 - Secure filename handling
 - PDF text extraction
-- **AI-powered resume analysis** (NEW)
-- **Structured information extraction** (NEW)
-- **Clean analysis display** (NEW)
+- **AI-powered resume analysis** (Commit #4)
+- **Structured information extraction** (Commit #4)
+- **Clean analysis display** (Commit #4)
+- **Job description analysis** (NEW - Commit #5)
+- **Required/preferred skill extraction** (NEW - Commit #5)
+- **Job requirement extraction** (NEW - Commit #5)
 
 ## Planned Features
 
@@ -98,14 +101,37 @@ Then open http://127.0.0.1:5000/ in your browser.
 
 1. **Upload Resume**: Choose a PDF resume smaller than 5 MB
 2. **Review Extracted Text**: The app extracts text from your PDF for preview
-3. **Analyze with AI**: Click "Analyze Resume with AI" to get structured analysis
-4. **View Results**: See extracted information including name, email, skills, education, experience, projects, certifications, and achievements
+3. **Analyze Resume with AI**: Click "Analyze Resume with AI" to get structured analysis
+4. **View Resume Results**: See extracted information including name, email, skills, education, experience, projects, certifications, and achievements
+5. **Analyze Job Description**: Enter a job title and paste a job description
+6. **View Job Results**: See required skills, preferred skills, programming languages, frameworks, tools, databases, education, experience, responsibilities, qualifications, and keywords
 
-## AI Architecture
+## Job Description Analysis
 
-The application uses OpenAI's GPT API to analyze resume text:
+The job analyzer extracts structured information from job postings:
 
 ```
+Job Description (text)
+    ↓
+LLM Analysis (OpenAI API)
+    ↓
+Structured JSON (required skills, preferred skills, frameworks, etc.)
+    ↓
+Display Results (formatted on page)
+```
+
+This enables future features like:
+- Resume-to-job skill matching
+- Identifying skill gaps
+- Prioritizing which skills to focus on
+- Generating targeted interview questions
+Resume analysis using OpenAI API
+- **`ai/job_analyzer.py`**: Job description analysis using OpenAI API
+- **`templates/index.html`**: User interface
+- **`static/js/script.js`**: Frontend analysis handling and loading states
+- **`static/css/style.css`**: Styling
+
+Analyzers are separated from Flask to keep code modular and test
 Resume PDF (upload)
     ↓
 PDF Text Extraction (pypdf)

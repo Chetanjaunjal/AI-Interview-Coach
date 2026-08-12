@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 from ai.resume_analyzer import get_analyzer
+from ai.job_analyzer import get_job_analyzer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -128,6 +129,48 @@ def analyze_resume_api():
     except Exception as e:
         # Catch unexpected errors and don't expose details to frontend
         print(f"Error in /api/analyze-resume: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "An unexpected error occurred. Please try again."
+        }), 500
+
+
+@app.route("/api/analyze-job", methods=["POST"])
+def analyze_job_api():
+    """
+    API endpoint to analyze a job description.
+    
+    Receives JSON with job title, company (optional), and description.
+    Returns structured job analysis.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        job_title = data.get("job_title", "").strip()
+        job_description = data.get("job_description", "").strip()
+        company = data.get("company", "").strip() if data.get("company") else None
+
+        # Get the analyzer instance
+        analyzer = get_job_analyzer()
+        if not analyzer:
+            return jsonify({
+                "success": False,
+                "error": "AI service is not configured. Please set OPENAI_API_KEY."
+            }), 500
+
+        # Analyze the job description
+        result = analyzer.analyze_job_description(job_title, job_description, company)
+        
+        if result.get("success"):
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        # Catch unexpected errors
+        print(f"Error in /api/analyze-job: {str(e)}")
         return jsonify({
             "success": False,
             "error": "An unexpected error occurred. Please try again."

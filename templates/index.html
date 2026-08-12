@@ -85,6 +85,61 @@
             {% endif %}
         </section>
 
+        <section class="job-description-upload" id="analyze-job">
+            <p class="eyebrow">Target the role</p>
+            <h2>Analyze Job Description</h2>
+            <p class="upload-instructions">
+                Enter the job title and paste the job description so we can analyze the requirements for this role.
+            </p>
+
+            <form class="job-analysis-form" id="job-analysis-form">
+                <div class="form-group">
+                    <label for="job-title">Job Title *</label>
+                    <input 
+                        id="job-title" 
+                        name="job_title" 
+                        type="text" 
+                        placeholder="e.g., Java Developer, Senior Python Engineer"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="company">Company (Optional)</label>
+                    <input 
+                        id="company" 
+                        name="company" 
+                        type="text" 
+                        placeholder="e.g., Google, Microsoft, Startup XYZ"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="job-description">Job Description *</label>
+                    <textarea 
+                        id="job-description" 
+                        name="job_description" 
+                        placeholder="Paste the full job description here..." 
+                        required
+                    ></textarea>
+                    <p class="char-limit">
+                        <span id="char-count">0</span> / <span id="char-limit">50000</span> characters
+                    </p>
+                </div>
+
+                <button class="primary-button" type="submit">Analyze Job Description</button>
+            </form>
+
+            <p id="job-analysis-status" class="analysis-status" style="display:none;"></p>
+
+            <!-- Job Analysis Results Section -->
+            <section id="job-analysis-results" class="job-analysis" aria-labelledby="job-analysis-heading" style="display:none;">
+                <p class="eyebrow">Job Requirements</p>
+                <h3 id="job-analysis-heading">Job Analysis</h3>
+                <div id="job-analysis-content"></div>
+            </section>
+        </section>
+
         <section class="how-it-works" id="how-it-works">
             <p class="eyebrow">Your practice room</p>
             <h2>Make every answer a little stronger.</h2>

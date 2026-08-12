@@ -12,6 +12,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (analyzeButton) {
         analyzeButton.addEventListener("click", handleAnalyzeResume);
     }
+
+    // Job Analysis Form
+    const jobAnalysisForm = document.querySelector("#job-analysis-form");
+    if (jobAnalysisForm) {
+        jobAnalysisForm.addEventListener("submit", handleAnalyzeJob);
+        
+        // Character counter for job description
+        const jobDescriptionField = document.querySelector("#job-description");
+        const charCountSpan = document.querySelector("#char-count");
+        if (jobDescriptionField && charCountSpan) {
+            jobDescriptionField.addEventListener("input", () => {
+                charCountSpan.textContent = jobDescriptionField.value.length;
+            });
+        }
+    }
 });
 
 /**
@@ -186,4 +201,171 @@ function escapeHtml(text) {
         "'": "&#039;"
     };
     return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Handle job description analysis form submission.
+ * 
+ * This function:
+ * 1. Gets form data (job title, company, description)
+ * 2. Sends it to the /api/analyze-job endpoint
+ * 3. Shows loading state while waiting for the API
+ * 4. Displays results or error message
+ */
+async function handleAnalyzeJob(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const submitButton = form.querySelector('button[type="submit"]');
+    const analysisStatus = document.querySelector("#job-analysis-status");
+    const analysisResults = document.querySelector("#job-analysis-results");
+    const analysisContent = document.querySelector("#job-analysis-content");
+
+    const jobTitle = document.querySelector("#job-title").value.trim();
+    const company = document.querySelector("#company").value.trim();
+    const jobDescription = document.querySelector("#job-description").value.trim();
+
+    // Validate on client-side for better UX
+    if (!jobTitle) {
+        analysisStatus.textContent = "Error: Please enter a job title.";
+        analysisStatus.style.display = "block";
+        analysisStatus.className = "analysis-status error";
+        return;
+    }
+
+    if (!jobDescription) {
+        analysisStatus.textContent = "Error: Please enter a job description.";
+        analysisStatus.style.display = "block";
+        analysisStatus.className = "analysis-status error";
+        return;
+    }
+
+    if (jobDescription.length < 50) {
+        analysisStatus.textContent = "Error: Job description is too short (minimum 50 characters).";
+        analysisStatus.style.display = "block";
+        analysisStatus.className = "analysis-status error";
+        return;
+    }
+
+    // Show loading state
+    submitButton.disabled = true;
+    submitButton.textContent = "Analyzing job description...";
+    analysisStatus.textContent = "Analyzing job description with AI...";
+    analysisStatus.style.display = "block";
+    analysisStatus.className = "analysis-status loading";
+    analysisResults.style.display = "none";
+
+    try {
+        // Send to API
+        const response = await fetch("/api/analyze-job", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                job_title: jobTitle,
+                company: company || null,
+                job_description: jobDescription
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.analysis) {
+            // Display job analysis results
+            displayJobAnalysisResults(data.analysis);
+            analysisStatus.textContent = "Job description analyzed successfully.";
+            analysisStatus.className = "analysis-status success";
+        } else {
+            // Show error message from API
+            analysisStatus.textContent = `Unable to analyze job description: ${data.error || "Unknown error"}`;
+            analysisStatus.className = "analysis-status error";
+            analysisResults.style.display = "none";
+        }
+    } catch (error) {
+        // Network or other errors
+        analysisStatus.textContent = "Unable to analyze job description. Please check your internet connection and try again.";
+        analysisStatus.className = "analysis-status error";
+        analysisResults.style.display = "none";
+        console.error("Error analyzing job:", error);
+    } finally {
+        // Restore button state
+        submitButton.disabled = false;
+        submitButton.textContent = "Analyze Job Description";
+    }
+}
+
+/**
+ * Display the job analysis results on the page.
+ * 
+ * Args:
+ *     analysis: The parsed job analysis object from the API
+ * 
+ * This function takes the structured JSON response from the AI
+ * and formats it nicely on the page using HTML.
+ */
+function displayJobAnalysisResults(analysis) {
+    const analysisContent = document.querySelector("#job-analysis-content");
+    const analysisResults = document.querySelector("#job-analysis-results");
+
+    // Start building the HTML
+    let html = '<div class="job-analysis-grid">';
+
+    // Helper function to display a field
+    const displayField = (label, value, isList = false) => {
+        let formattedValue;
+
+        if (isList && Array.isArray(value) && value.length > 0) {
+            formattedValue = value
+                .map(item => `<li>${escapeHtml(String(item))}</li>`)
+                .join("");
+            return `
+                <div class="job-field">
+                    <h4>${label}</h4>
+                    <ul>${formattedValue}</ul>
+                </div>
+            `;
+        } else if (!isList && value && value !== "Not mentioned") {
+            return `
+                <div class="job-field">
+                    <h4>${label}</h4>
+                    <p>${escapeHtml(String(value))}</p>
+                </div>
+            `;
+        } else if (isList && Array.isArray(value) && value.length === 0) {
+            return `
+                <div class="job-field">
+                    <h4>${label}</h4>
+                    <p class="not-mentioned">Not mentioned</p>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="job-field">
+                    <h4>${label}</h4>
+                    <p class="not-mentioned">${escapeHtml(String(value || "Not mentioned"))}</p>
+                </div>
+            `;
+        }
+    };
+
+    // Display each field
+    html += displayField("Job Title", analysis.job_title);
+    html += displayField("Company", analysis.company);
+    html += displayField("Required Skills", analysis.required_skills, true);
+    html += displayField("Preferred Skills", analysis.preferred_skills, true);
+    html += displayField("Programming Languages", analysis.programming_languages, true);
+    html += displayField("Frameworks", analysis.frameworks, true);
+    html += displayField("Tools", analysis.tools, true);
+    html += displayField("Databases", analysis.databases, true);
+    html += displayField("Education", analysis.education);
+    html += displayField("Experience", analysis.experience);
+    html += displayField("Responsibilities", analysis.responsibilities, true);
+    html += displayField("Qualifications", analysis.qualifications, true);
+    html += displayField("Keywords", analysis.keywords, true);
+
+    html += "</div>";
+
+    analysisContent.innerHTML = html;
+    analysisResults.style.display = "block";
 }
