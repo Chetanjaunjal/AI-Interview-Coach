@@ -1,8 +1,15 @@
 import os
+import json
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+from ai.resume_analyzer import get_analyzer
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
@@ -42,6 +49,10 @@ def file_too_large(error):
 
 @app.route("/upload-resume", methods=["POST"])
 def upload_resume():
+    """
+    Handle resume file upload and text extraction.
+    Returns JSON with extracted text for the frontend to send for analysis.
+    """
     uploaded_file = request.files.get("resume")
 
     if uploaded_file is None:
@@ -75,6 +86,52 @@ def upload_resume():
     extracted_text = extract_text_from_pdf(save_path)
     flash("Resume uploaded successfully.", "success")
     return render_template("index.html", extracted_text=extracted_text)
+
+
+@app.route("/api/analyze-resume", methods=["POST"])
+def analyze_resume_api():
+    """
+    API endpoint to analyze extracted resume text.
+    Receives JSON with resume text, returns structured analysis.
+    
+    This separation (upload → extract → analyze) allows:
+    1. Users to review extracted text before analysis
+    2. Cleaner error handling for each step
+    3. Users to retry analysis if the API fails
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        resume_text = data.get("resume_text", "").strip()
+        
+        if not resume_text:
+            return jsonify({"success": False, "error": "No resume text provided"}), 400
+
+        # Get the analyzer instance
+        analyzer = get_analyzer()
+        if not analyzer:
+            return jsonify({
+                "success": False,
+                "error": "AI service is not configured. Please set OPENAI_API_KEY."
+            }), 500
+
+        # Analyze the resume
+        result = analyzer.analyze_resume(resume_text)
+        
+        if result.get("success"):
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        # Catch unexpected errors and don't expose details to frontend
+        print(f"Error in /api/analyze-resume: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "An unexpected error occurred. Please try again."
+        }), 500
 
 
 @app.route("/")

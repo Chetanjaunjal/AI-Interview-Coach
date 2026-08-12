@@ -1,2 +1,5 @@
 Flask
 pypdf
+python-dotenv
+openai
+requests

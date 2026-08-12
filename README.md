@@ -10,7 +10,9 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - 5 MB upload limit
 - Secure filename handling
 - PDF text extraction
-- Extracted text preview
+- **AI-powered resume analysis** (NEW)
+- **Structured information extraction** (NEW)
+- **Clean analysis display** (NEW)
 
 ## Planned Features
 
@@ -29,6 +31,7 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - HTML
 - CSS
 - JavaScript
+- OpenAI API
 - Git and GitHub
 
 ## Project Structure
@@ -52,22 +55,85 @@ AI-Interview-Coach/
 ```
 
 ## Run Locally
-
-Create and activate a virtual environment, install the dependencies, and start Flask:
+### 1. Create a virtual environment
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 2. Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+### 3. Set up environment variables
+
+Copy `.env.example` to `.env` and add your OpenAI API key:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and replace `your_api_key_here` with your actual OpenAI API key:
+
+```
+OPENAI_API_KEY=sk-proj-your-actual-key-here
+```
+
+**Get your API key**: Sign up at https://platform.openai.com/account/api-keys
+
+**Important**: Never commit `.env` to GitHub. It's already in `.gitignore`.
+
+### 4. Start the application
+
+```bash
 python app.py
 ```
 
 Then open http://127.0.0.1:5000/ in your browser.
 
-## Resume Upload
+## How to Use
 
-On the home page, choose a PDF smaller than 5 MB and select **Upload Resume**.
-Valid files are saved locally in `uploads/`. After saving, `pypdf` opens the PDF,
-loops through its pages, extracts readable text from each page, and combines the
-results for a preview on the page. Image-only PDFs do not contain selectable text,
+1. **Upload Resume**: Choose a PDF resume smaller than 5 MB
+2. **Review Extracted Text**: The app extracts text from your PDF for preview
+3. **Analyze with AI**: Click "Analyze Resume with AI" to get structured analysis
+4. **View Results**: See extracted information including name, email, skills, education, experience, projects, certifications, and achievements
+
+## AI Architecture
+
+The application uses OpenAI's GPT API to analyze resume text:
+
+```
+Resume PDF (upload)
+    ↓
+PDF Text Extraction (pypdf)
+    ↓
+Extracted Text (preview)
+    ↓
+LLM Analysis (OpenAI API)
+    ↓
+Structured JSON (name, email, skills, etc.)
+    ↓
+Display Results (formatted on page)
+```
+
+### Code Structure
+
+- **`app.py`**: Flask routes and PDF handling
+- **`ai/resume_analyzer.py`**: OpenAI API communication and response parsing
+- **`templates/index.html`**: User interface
+- **`static/js/script.js`**: Frontend analysis handling and loading states
+- **`static/css/style.css`**: Styling
+
+The analyzer is separated from the Flask app to keep code modular and maintainable.
+
+## Environment Variables
+
+Create a `.env` file in the project root (see `.env.example` for template):
+
+- `OPENAI_API_KEY`: Your OpenAI API key (required for AI analysis)
+- `SECRET_KEY`: Flask secret key (optional, defaults to development key)
+- `FLASK_DEBUG`: Set to `True` for development (optional) text,
 so they show a message explaining that OCR may be needed in a future commit.

@@ -65,11 +65,22 @@
                     <h3 id="extracted-text-heading">Extracted Resume Text</h3>
                     {% if extracted_text %}
                         <pre>{{ extracted_text }}</pre>
+                        <button class="primary-button" id="analyze-button" type="button">
+                            Analyze Resume with AI
+                        </button>
+                        <p id="analysis-status" class="analysis-status" style="display:none;"></p>
                     {% else %}
                         <p class="extraction-message">
                             Could not extract readable text from this PDF. The resume may contain scanned images.
                         </p>
                     {% endif %}
+                </section>
+
+                <!-- AI Analysis Results Section -->
+                <section id="analysis-results" class="resume-analysis" aria-labelledby="analysis-heading" style="display:none;">
+                    <p class="eyebrow">AI-Powered Analysis</p>
+                    <h3 id="analysis-heading">Resume Analysis</h3>
+                    <div id="analysis-content"></div>
                 </section>
             {% endif %}
         </section>
