@@ -140,6 +140,72 @@
             </section>
         </section>
 
+        <!-- Resume Job Matching Section -->
+        <section class="job-matching" id="resume-matching">
+            <p class="eyebrow">Alignment check</p>
+            <h2>Resume ↔ Job Match</h2>
+            <p class="upload-instructions">
+                After analyzing both your resume and a job description, see how well your skills align with the role requirements.
+            </p>
+
+            <button class="primary-button" id="match-button" type="button" style="display:none;">
+                Match Resume to Job
+            </button>
+
+            <p id="match-status" class="analysis-status" style="display:none;"></p>
+
+            <!-- Matching Results Section -->
+            <section id="matching-results" class="matching-results" aria-labelledby="matching-heading" style="display:none;">
+                <p class="eyebrow">Your Fit</p>
+                <h3 id="matching-heading">Resume-Job Matching Results</h3>
+
+                <!-- Match Score Display -->
+                <div class="match-score-container">
+                    <div class="match-score-circle">
+                        <div class="match-score-percentage" id="match-percentage">0%</div>
+                        <div class="match-score-label">Match Score</div>
+                    </div>
+                </div>
+
+                <!-- Matched Required Skills -->
+                <div class="skill-section" id="matched-required-section" style="display:none;">
+                    <h4>✓ Matched Required Skills</h4>
+                    <ul id="matched-required-list" class="skill-list"></ul>
+                </div>
+
+                <!-- Missing Required Skills -->
+                <div class="skill-section" id="missing-required-section" style="display:none;">
+                    <h4>✗ Missing Required Skills</h4>
+                    <ul id="missing-required-list" class="skill-list"></ul>
+                </div>
+
+                <!-- Matched Preferred Skills -->
+                <div class="skill-section" id="matched-preferred-section" style="display:none;">
+                    <h4>✓ Matched Preferred Skills</h4>
+                    <ul id="matched-preferred-list" class="skill-list"></ul>
+                </div>
+
+                <!-- Missing Preferred Skills -->
+                <div class="skill-section" id="missing-preferred-section" style="display:none;">
+                    <h4>✗ Missing Preferred Skills</h4>
+                    <ul id="missing-preferred-list" class="skill-list"></ul>
+                </div>
+
+                <!-- Additional Candidate Skills -->
+                <div class="skill-section" id="additional-skills-section" style="display:none;">
+                    <h4>+ Additional Skills</h4>
+                    <p class="section-description">Skills you have that aren't specifically required for this role.</p>
+                    <ul id="additional-skills-list" class="skill-list"></ul>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="recommendations-section" id="recommendations-section" style="display:none;">
+                    <h4>📋 Recommendations</h4>
+                    <ol id="recommendations-list" class="recommendations-list"></ol>
+                </div>
+            </section>
+        </section>
+
         <section class="how-it-works" id="how-it-works">
             <p class="eyebrow">Your practice room</p>
             <h2>Make every answer a little stronger.</h2>

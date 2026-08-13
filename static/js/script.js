@@ -27,6 +27,12 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
     }
+
+    // Match Resume Button
+    const matchButton = document.querySelector("#match-button");
+    if (matchButton) {
+        matchButton.addEventListener("click", handleMatchResume);
+    }
 });
 
 /**
@@ -177,6 +183,9 @@ function displayAnalysisResults(analysis) {
 
     analysisContent.innerHTML = html;
     analysisResults.style.display = "block";
+
+    // Check if both analyses are complete and show match button
+    updateMatchButtonVisibility();
 }
 
 /**
@@ -368,4 +377,187 @@ function displayJobAnalysisResults(analysis) {
 
     analysisContent.innerHTML = html;
     analysisResults.style.display = "block";
+
+    // Check if both analyses are complete and show match button
+    updateMatchButtonVisibility();
+}
+
+/**
+ * Check if both resume and job analyses are complete.
+ * If so, show the match button. Otherwise, hide it.
+ * 
+ * This prevents users from trying to match if either analysis is missing.
+ */
+function updateMatchButtonVisibility() {
+    const resumeAnalysisSection = document.querySelector("#analysis-results");
+    const jobAnalysisSection = document.querySelector("#job-analysis-results");
+    const matchButton = document.querySelector("#match-button");
+
+    if (!matchButton) return;
+
+    // Both analyses must be visible
+    const resumeAnalyzed = resumeAnalysisSection && resumeAnalysisSection.style.display !== "none";
+    const jobAnalyzed = jobAnalysisSection && jobAnalysisSection.style.display !== "none";
+
+    if (resumeAnalyzed && jobAnalyzed) {
+        matchButton.style.display = "block";
+    } else {
+        matchButton.style.display = "none";
+    }
+}
+
+/**
+ * Handle the match resume button click.
+ * 
+ * This function:
+ * 1. Sends a request to /api/match-resume
+ * 2. Shows loading state while waiting
+ * 3. Displays matching results or error message
+ * 4. Renders the match score and skill breakdowns
+ */
+async function handleMatchResume() {
+    const matchButton = document.querySelector("#match-button");
+    const matchStatus = document.querySelector("#match-status");
+    const matchingResults = document.querySelector("#matching-results");
+
+    // Show loading state
+    matchButton.disabled = true;
+    matchButton.textContent = "Matching resume to job...";
+    matchStatus.textContent = "Matching your resume to the job requirements...";
+    matchStatus.style.display = "block";
+    matchStatus.className = "analysis-status loading";
+    matchingResults.style.display = "none";
+
+    try {
+        // Send to API
+        const response = await fetch("/api/match-resume", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.result) {
+            // Display matching results
+            displayMatchingResults(data.result);
+            matchStatus.textContent = "Matching complete!";
+            matchStatus.className = "analysis-status success";
+        } else {
+            // Show error message from API
+            matchStatus.textContent = `Unable to match resume: ${data.error || "Unknown error"}`;
+            matchStatus.className = "analysis-status error";
+            matchingResults.style.display = "none";
+        }
+    } catch (error) {
+        // Network or other errors
+        matchStatus.textContent = "Unable to match resume. Please check your internet connection and try again.";
+        matchStatus.className = "analysis-status error";
+        matchingResults.style.display = "none";
+        console.error("Error matching resume:", error);
+    } finally {
+        // Restore button state
+        matchButton.disabled = false;
+        matchButton.textContent = "Match Resume to Job";
+    }
+}
+
+/**
+ * Display the matching results on the page.
+ * 
+ * Args:
+ *     result: The matching result object from the API containing:
+ *             - match_percentage: 0-100
+ *             - matched_required_skills: []
+ *             - missing_required_skills: []
+ *             - matched_preferred_skills: []
+ *             - missing_preferred_skills: []
+ *             - additional_candidate_skills: []
+ *             - recommendations: []
+ */
+function displayMatchingResults(result) {
+    const matchPercentage = document.querySelector("#match-percentage");
+    const matchedRequiredSection = document.querySelector("#matched-required-section");
+    const matchedRequiredList = document.querySelector("#matched-required-list");
+    const missingRequiredSection = document.querySelector("#missing-required-section");
+    const missingRequiredList = document.querySelector("#missing-required-list");
+    const matchedPreferredSection = document.querySelector("#matched-preferred-section");
+    const matchedPreferredList = document.querySelector("#matched-preferred-list");
+    const missingPreferredSection = document.querySelector("#missing-preferred-section");
+    const missingPreferredList = document.querySelector("#missing-preferred-list");
+    const additionalSkillsSection = document.querySelector("#additional-skills-section");
+    const additionalSkillsList = document.querySelector("#additional-skills-list");
+    const recommendationsSection = document.querySelector("#recommendations-section");
+    const recommendationsList = document.querySelector("#recommendations-list");
+    const matchingResults = document.querySelector("#matching-results");
+
+    // Display match percentage
+    const percentage = result.match_percentage || 0;
+    if (matchPercentage) {
+        matchPercentage.textContent = `${percentage}%`;
+    }
+
+    // Display matched required skills
+    if (result.matched_required_skills && result.matched_required_skills.length > 0) {
+        matchedRequiredList.innerHTML = result.matched_required_skills
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        matchedRequiredSection.style.display = "block";
+    } else {
+        matchedRequiredSection.style.display = "none";
+    }
+
+    // Display missing required skills
+    if (result.missing_required_skills && result.missing_required_skills.length > 0) {
+        missingRequiredList.innerHTML = result.missing_required_skills
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        missingRequiredSection.style.display = "block";
+    } else {
+        missingRequiredSection.style.display = "none";
+    }
+
+    // Display matched preferred skills
+    if (result.matched_preferred_skills && result.matched_preferred_skills.length > 0) {
+        matchedPreferredList.innerHTML = result.matched_preferred_skills
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        matchedPreferredSection.style.display = "block";
+    } else {
+        matchedPreferredSection.style.display = "none";
+    }
+
+    // Display missing preferred skills
+    if (result.missing_preferred_skills && result.missing_preferred_skills.length > 0) {
+        missingPreferredList.innerHTML = result.missing_preferred_skills
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        missingPreferredSection.style.display = "block";
+    } else {
+        missingPreferredSection.style.display = "none";
+    }
+
+    // Display additional candidate skills
+    if (result.additional_candidate_skills && result.additional_candidate_skills.length > 0) {
+        additionalSkillsList.innerHTML = result.additional_candidate_skills
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        additionalSkillsSection.style.display = "block";
+    } else {
+        additionalSkillsSection.style.display = "none";
+    }
+
+    // Display recommendations
+    if (result.recommendations && result.recommendations.length > 0) {
+        recommendationsList.innerHTML = result.recommendations
+            .map(rec => `<li>${escapeHtml(rec)}</li>`)
+            .join("");
+        recommendationsSection.style.display = "block";
+    } else {
+        recommendationsSection.style.display = "none";
+    }
+
+    // Show the entire results section
+    matchingResults.style.display = "block";
 }

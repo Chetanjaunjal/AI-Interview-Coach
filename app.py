@@ -1,13 +1,14 @@
 import os
 import json
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 from ai.resume_analyzer import get_analyzer
 from ai.job_analyzer import get_job_analyzer
+from ai.matcher import match_resume_to_job
 
 # Load environment variables from .env file
 load_dotenv()
@@ -122,6 +123,9 @@ def analyze_resume_api():
         result = analyzer.analyze_resume(resume_text)
         
         if result.get("success"):
+            # Store resume analysis in session for matching
+            session["resume_analysis"] = result
+            session.modified = True
             return jsonify(result), 200
         else:
             return jsonify(result), 400
@@ -164,6 +168,9 @@ def analyze_job_api():
         result = analyzer.analyze_job_description(job_title, job_description, company)
         
         if result.get("success"):
+            # Store job analysis in session for matching
+            session["job_analysis"] = result
+            session.modified = True
             return jsonify(result), 200
         else:
             return jsonify(result), 400
@@ -174,6 +181,64 @@ def analyze_job_api():
         return jsonify({
             "success": False,
             "error": "An unexpected error occurred. Please try again."
+        }), 500
+
+
+@app.route("/api/match-resume", methods=["POST"])
+def match_resume_api():
+    """
+    API endpoint to match resume skills against job requirements.
+    
+    This endpoint:
+    1. Checks if both resume and job analyses exist in session
+    2. Calls the matching engine
+    3. Returns structured matching results
+    
+    Uses deterministic Python logic (no LLM calls) for speed, cost, and explainability.
+    
+    Flow:
+    Resume Analysis (stored in session)
+         +
+    Job Analysis (stored in session)
+         ↓
+    Matching Engine (ai/matcher.py)
+         ↓
+    Matching Results (JSON)
+    """
+    try:
+        # Check if analyses exist in session
+        resume_analysis = session.get("resume_analysis")
+        job_analysis = session.get("job_analysis")
+
+        if not resume_analysis:
+            return jsonify({
+                "success": False,
+                "error": "Resume has not been analyzed yet. Please analyze your resume first."
+            }), 400
+
+        if not job_analysis:
+            return jsonify({
+                "success": False,
+                "error": "Job description has not been analyzed yet. Please analyze the job description first."
+            }), 400
+
+        # Call the matching engine
+        matching_result = match_resume_to_job(resume_analysis, job_analysis)
+
+        if matching_result.get("success"):
+            return jsonify({
+                "success": True,
+                "result": matching_result.get("result")
+            }), 200
+        else:
+            return jsonify(matching_result), 400
+
+    except Exception as e:
+        # Catch unexpected errors
+        print(f"Error in /api/match-resume: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "An unexpected error occurred during matching. Please try again."
         }), 500
 
 
