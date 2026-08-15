@@ -16,10 +16,13 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - **Job description analysis** (Commit #5)
 - **Required/preferred skill extraction** (Commit #5)
 - **Job requirement extraction** (Commit #5)
-- **Resume-job skill matching** (NEW - Commit #6)
-- **Match percentage calculation** (NEW - Commit #6)
-- **Matched/missing skill identification** (NEW - Commit #6)
-- **Skill recommendations** (NEW - Commit #6)
+- **Resume-job skill matching** (Commit #6)
+- **Match percentage calculation** (Commit #6)
+- **Matched/missing skill identification** (Commit #6)
+- **Skill recommendations** (Commit #6)
+- **Semantic skill matching using embeddings** (NEW - Commit #7)
+- **Hybrid exact + semantic matching** (NEW - Commit #7)
+- **Semantic similarity scoring** (NEW - Commit #7)
 
 ## Planned Features
 
@@ -197,17 +200,213 @@ Where:
 - ✅ Reproducible: Same input always produces same output
 - ✅ Debuggable: Easy to understand and fix bugs
 
-**Limitations (by design):**
+**Limitations (by design in Commit #6):**
 - No semantic similarity: "REST API" ≠ "Web API" (different words = no match)
 - No skill levels: "1 year Java" counts same as "10 years Java"
 - No skill dependencies: "Java" ≠ "OOP" (even though OOP is implied)
 - No synonyms: "Database" vs "SQL" treated as different
 
-**Future improvements (in later commits):**
-- Semantic matching using embeddings
-- Skill level understanding
-- Relationship mappings (Java → OOP)
-- Synonym recognition
+**These limitations are addressed in Commit #7 with semantic matching.**
+
+---
+
+## Semantic Skill Matching with Embeddings (Commit #7)
+
+Commit #7 enhances the matching system with **semantic understanding** using embeddings while preserving the reliability of exact matching.
+
+### What Are Embeddings?
+
+An embedding is a way to represent text as a list of numbers that captures its meaning.
+
+```
+Text:      "REST API development"
+           ↓ (Convert to numbers)
+Embedding: [0.234, -0.891, 0.456, 0.123, -0.234, ..., 0.456]
+           (384 numbers for all-MiniLM-L6-v2 model)
+```
+
+Similar concepts have similar embeddings:
+- "REST API" and "RESTful API" → very close numbers
+- "JavaScript" → very different numbers
+
+### How Semantic Matching Works
+
+```
+Resume Skill: "REST API development"
+Job Skill: "RESTful API"
+
+Step 1: Convert to embeddings
+  Resume: [0.234, -0.891, 0.456, ...]
+  Job:    [0.245, -0.875, 0.468, ...]
+
+Step 2: Calculate similarity (cosine similarity)
+  Similarity: 0.87 (on a scale of 0 to 1)
+
+Step 3: Compare to threshold (default: 0.75)
+  0.87 > 0.75 → MATCH! ✓
+```
+
+### Hybrid Matching: Best of Both Worlds
+
+```
+Resume Skill
+    ↓
+    ├─ Try Exact Matching First
+    │   └─ If match found → Record as "exact" (100% confidence)
+    │
+    └─ If no exact match, Try Semantic Matching
+        ├─ Convert to embeddings
+        ├─ Calculate similarity
+        └─ If similarity > threshold → Record as "semantic" (87% confidence, for example)
+```
+
+**Why hybrid?**
+- Exact matches are most reliable (zero false positives)
+- Semantic matching catches variations and synonyms
+- Semantic matches include confidence scores (similarity %)
+- Users see which type of match was made
+
+### Real Examples
+
+| Candidate | Job | Exact Match | Semantic Match | Result |
+|-----------|-----|-------------|----------------|--------|
+| REST API development | RESTful API | ❌ No | ✅ Yes (87%) | MATCH |
+| OOP | Object Oriented Programming | ❌ No | ✅ Yes (92%) | MATCH |
+| SQL | SQL | ✅ Yes | N/A | MATCH |
+| Java | JavaScript | ❌ No | ❌ No (45% < 0.75) | NO MATCH ✓ |
+| Python | PyTorch | ❌ No | ❌ No (62% < 0.75) | NO MATCH ✓ |
+
+### The Embedding Model
+
+We use **`all-MiniLM-L6-v2`** from Sentence Transformers:
+
+- **Lightweight**: Only 384 dimensions (vs 1536 for larger models)
+- **Fast**: Runs on CPU without GPU
+- **Pretrained**: Already trained on billions of sentences
+- **General-purpose**: Works well for diverse skill descriptions
+- **Free and local**: No API calls needed, runs entirely on your computer
+
+### Similarity Threshold
+
+The threshold determines when to consider skills as matching:
+
+```
+Threshold = 0.75 (default, can be adjusted)
+
+Similarity Score    Decision
+     0.0-0.50      Not similar
+     0.50-0.75     Somewhat similar (below threshold)
+     0.75-1.0      Similar match (above threshold)
+```
+
+**Why a threshold?**
+- Too low (0.50): Many false positives (Java matches JavaScript)
+- Too high (0.95): Many false negatives (REST API doesn't match RESTful API)
+- Sweet spot (0.75): Balances false positives and false negatives
+
+You can adjust the threshold in `ai/semantic_matcher.py`:
+```python
+SEMANTIC_SIMILARITY_THRESHOLD = 0.75  # Change this value
+```
+
+### Performance Optimization
+
+To avoid redundant embeddings calculations:
+
+```python
+# Inefficient: Recalculates embeddings for every comparison
+for job_skill in job_skills:
+    for candidate_skill in candidate_skills:
+        similarity = calculate_semantic_similarity(job_skill, candidate_skill)
+
+# With 20 job skills × 20 candidate skills = 400 calculations!
+
+# Efficient: Pre-compute once, reuse many times
+candidate_embeddings = precompute_embeddings(candidate_skills)
+for job_skill in job_skills:
+    match = find_best_semantic_match(
+        job_skill,
+        candidate_skills,
+        pre_computed_embeddings=candidate_embeddings
+    )
+
+# Only 40 calculations (20 + 20)
+# 10x faster!
+```
+
+### Key Files for Semantic Matching
+
+- **`ai/semantic_matcher.py`**: Embedding and similarity calculations
+  - `get_embedding_model()`: Loads the sentence transformer model
+  - `generate_embedding()`: Converts text to embedding
+  - `calculate_cosine_similarity()`: Measures vector similarity
+  - `calculate_semantic_similarity()`: Main similarity function
+  - `find_best_semantic_match()`: Finds best match in candidates
+  - `precompute_embeddings()`: Optimization for multiple comparisons
+  
+- **`ai/matcher.py`**: Updated hybrid matching logic
+  - `find_hybrid_matches()`: Combines exact + semantic matching
+  - `match_resume_to_job()`: Now returns match types and scores
+  
+- **`tests/test_semantic_matcher.py`**: Semantic matching tests
+  - 18 test cases for similarity calculations
+  - Tests false positive prevention (Java vs JavaScript)
+  - Threshold behavior tests
+  
+- **`tests/test_hybrid_matcher.py`**: Hybrid integration tests
+  - 15 test cases for combined exact + semantic matching
+  - Full pipeline testing
+
+### Limitations of Embeddings
+
+**Embeddings are not magic—they have limitations:**
+
+1. **Domain-specific limitations**: The model is trained on general text, not specialized technical domains
+2. **Surprising similarities**: The model might assign unexpected similarity scores
+3. **Spelling sensitivity**: Typos significantly affect embeddings
+4. **Model quality**: Depends on the quality of training data
+5. **Probabilistic**: Not mathematically "correct," but statistically good enough
+
+**Examples of unexpected behavior:**
+```python
+similarity("Python", "Perl")       # Might be 0.65
+similarity("Java", "JavaScript")   # Might be 0.52 (just below threshold!)
+similarity("SQL", "NoSQL")         # Might be 0.58
+```
+
+**Why still use embeddings then?**
+- They catch many real skill variations (REST API vs RESTful API)
+- They reduce false negatives (missed valid skills)
+- They maintain a threshold to reduce false positives
+- Combined with exact matching, they're much more reliable
+
+### Testing the System
+
+Run the semantic matching tests:
+
+```bash
+# Test semantic similarity calculations
+python -m pytest tests/test_semantic_matcher.py -v
+
+# Test hybrid matching integration
+python -m pytest tests/test_hybrid_matcher.py -v
+
+# Run all tests
+python -m pytest tests/ -v
+```
+
+### Future Improvements
+
+Possible enhancements (not in Commit #7):
+- **Better models**: Use domain-specific embedding models for tech skills
+- **Skill ontology**: Build a graph of skill relationships
+- **Context awareness**: Consider job domain when matching
+- **Entity recognition**: Better identify skills vs frameworks vs tools
+- **Skill aliases**: Manually curated lists of known synonyms
+- **Vector databases**: Cache embeddings for faster comparisons
+- **RAG (Retrieval-Augmented Generation)**: Hybrid LLM + embedding approach
+
+---
 
 ### Key Files for Matching
 
@@ -232,18 +431,26 @@ Where:
 Test the matching system:
 
 ```bash
-source .venv/bin/activate
+source venv/bin/activate
+
+# Test exact matching (Commit #6)
 python -m unittest tests.test_matcher -v
+
+# Test semantic matching (Commit #7)
+python -m pytest tests/test_semantic_matcher.py -v
+
+# Test hybrid matching integration (Commit #7)
+python -m pytest tests/test_hybrid_matcher.py -v
+
+# Run all tests
+python -m pytest tests/ -v
 ```
 
-This runs 36 test cases covering:
-- Skill normalization
-- Exact and partial matching
-- Case-insensitive matching
-- Language distinction (Java vs JavaScript)
-- Score calculation with various skill combinations
-- Edge cases (empty skills, missing analyses)
-- Full matching workflows
+**Test coverage:**
+- Commit #6: 36 test cases for exact matching
+- Commit #7: 18 test cases for semantic similarity
+- Commit #7: 15 test cases for hybrid matching
+- Total: 69 comprehensive test cases
 Resume analysis using OpenAI API
 - **`ai/job_analyzer.py`**: Job description analysis using OpenAI API
 - **`templates/index.html`**: User interface

@@ -478,12 +478,28 @@ async function handleMatchResume() {
  */
 function displayMatchingResults(result) {
     const matchPercentage = document.querySelector("#match-percentage");
+    
+    // Exact match sections
+    const exactMatchedRequiredSection = document.querySelector("#exact-matched-required-section");
+    const exactMatchedRequiredList = document.querySelector("#exact-matched-required-list");
+    const exactMatchedPreferredSection = document.querySelector("#exact-matched-preferred-section");
+    const exactMatchedPreferredList = document.querySelector("#exact-matched-preferred-list");
+    
+    // Semantic match sections
+    const semanticMatchedRequiredSection = document.querySelector("#semantic-matched-required-section");
+    const semanticMatchedRequiredList = document.querySelector("#semantic-matched-required-list");
+    const semanticMatchedPreferredSection = document.querySelector("#semantic-matched-preferred-section");
+    const semanticMatchedPreferredList = document.querySelector("#semantic-matched-preferred-list");
+    
+    // Legacy combined sections (for backward compatibility)
     const matchedRequiredSection = document.querySelector("#matched-required-section");
     const matchedRequiredList = document.querySelector("#matched-required-list");
-    const missingRequiredSection = document.querySelector("#missing-required-section");
-    const missingRequiredList = document.querySelector("#missing-required-list");
     const matchedPreferredSection = document.querySelector("#matched-preferred-section");
     const matchedPreferredList = document.querySelector("#matched-preferred-list");
+    
+    // Missing and additional skills sections
+    const missingRequiredSection = document.querySelector("#missing-required-section");
+    const missingRequiredList = document.querySelector("#missing-required-list");
     const missingPreferredSection = document.querySelector("#missing-preferred-section");
     const missingPreferredList = document.querySelector("#missing-preferred-list");
     const additionalSkillsSection = document.querySelector("#additional-skills-section");
@@ -498,8 +514,76 @@ function displayMatchingResults(result) {
         matchPercentage.textContent = `${percentage}%`;
     }
 
-    // Display matched required skills
-    if (result.matched_required_skills && result.matched_required_skills.length > 0) {
+    // Helper function to separate exact and semantic matches
+    function separateMatches(matchedSkills) {
+        const exact = [];
+        const semantic = [];
+        
+        if (!Array.isArray(matchedSkills)) {
+            return { exact, semantic };
+        }
+        
+        for (const match of matchedSkills) {
+            if (typeof match === 'string') {
+                // Legacy format (just skill name)
+                exact.push(match);
+            } else if (typeof match === 'object' && match.match_type) {
+                if (match.match_type === 'exact') {
+                    exact.push(match.candidate_skill || match.job_skill);
+                } else if (match.match_type === 'semantic') {
+                    semantic.push(match);
+                }
+            }
+        }
+        
+        return { exact, semantic };
+    }
+
+    // Process required skills
+    const requiredMatches = separateMatches(result.matched_required_skills);
+    
+    // Display exact matched required skills
+    if (requiredMatches.exact.length > 0) {
+        exactMatchedRequiredList.innerHTML = requiredMatches.exact
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        exactMatchedRequiredSection.style.display = "block";
+    } else {
+        exactMatchedRequiredSection.style.display = "none";
+    }
+
+    // Display semantic matched required skills
+    if (requiredMatches.semantic.length > 0) {
+        semanticMatchedRequiredList.innerHTML = requiredMatches.semantic
+            .map(match => {
+                const similarity = Math.round(match.similarity * 100);
+                const html = `
+                    <li>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${escapeHtml(match.job_skill)}</strong>
+                                <br/>
+                                <small style="color: #666;">Your skill: ${escapeHtml(match.candidate_skill)}</small>
+                            </div>
+                            <div style="text-align: right; font-weight: bold; color: #27ae60;">
+                                ${similarity}%
+                            </div>
+                        </div>
+                    </li>
+                `;
+                return html;
+            })
+            .join("");
+        semanticMatchedRequiredSection.style.display = "block";
+    } else {
+        semanticMatchedRequiredSection.style.display = "none";
+    }
+
+    // Hide legacy combined section if using new format
+    if (result.matched_required_skills && Array.isArray(result.matched_required_skills) && result.matched_required_skills.length > 0 && typeof result.matched_required_skills[0] === 'object') {
+        matchedRequiredSection.style.display = "none";
+    } else if (result.matched_required_skills && result.matched_required_skills.length > 0) {
+        // Legacy format
         matchedRequiredList.innerHTML = result.matched_required_skills
             .map(skill => `<li>${escapeHtml(skill)}</li>`)
             .join("");
@@ -518,8 +602,51 @@ function displayMatchingResults(result) {
         missingRequiredSection.style.display = "none";
     }
 
-    // Display matched preferred skills
-    if (result.matched_preferred_skills && result.matched_preferred_skills.length > 0) {
+    // Process preferred skills
+    const preferredMatches = separateMatches(result.matched_preferred_skills);
+
+    // Display exact matched preferred skills
+    if (preferredMatches.exact.length > 0) {
+        exactMatchedPreferredList.innerHTML = preferredMatches.exact
+            .map(skill => `<li>${escapeHtml(skill)}</li>`)
+            .join("");
+        exactMatchedPreferredSection.style.display = "block";
+    } else {
+        exactMatchedPreferredSection.style.display = "none";
+    }
+
+    // Display semantic matched preferred skills
+    if (preferredMatches.semantic.length > 0) {
+        semanticMatchedPreferredList.innerHTML = preferredMatches.semantic
+            .map(match => {
+                const similarity = Math.round(match.similarity * 100);
+                const html = `
+                    <li>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${escapeHtml(match.job_skill)}</strong>
+                                <br/>
+                                <small style="color: #666;">Your skill: ${escapeHtml(match.candidate_skill)}</small>
+                            </div>
+                            <div style="text-align: right; font-weight: bold; color: #27ae60;">
+                                ${similarity}%
+                            </div>
+                        </div>
+                    </li>
+                `;
+                return html;
+            })
+            .join("");
+        semanticMatchedPreferredSection.style.display = "block";
+    } else {
+        semanticMatchedPreferredSection.style.display = "none";
+    }
+
+    // Hide legacy combined section if using new format
+    if (result.matched_preferred_skills && Array.isArray(result.matched_preferred_skills) && result.matched_preferred_skills.length > 0 && typeof result.matched_preferred_skills[0] === 'object') {
+        matchedPreferredSection.style.display = "none";
+    } else if (result.matched_preferred_skills && result.matched_preferred_skills.length > 0) {
+        // Legacy format
         matchedPreferredList.innerHTML = result.matched_preferred_skills
             .map(skill => `<li>${escapeHtml(skill)}</li>`)
             .join("");

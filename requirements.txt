@@ -3,3 +3,6 @@ pypdf
 python-dotenv
 openai
 requests
+sentence-transformers
+numpy
+scipy
