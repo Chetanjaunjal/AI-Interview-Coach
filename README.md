@@ -24,6 +24,9 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - **Hybrid exact + semantic matching** (NEW - Commit #7)
 - **Semantic similarity scoring** (NEW - Commit #7)
 - **Personalized AI interview question generation** (Commit #8)
+- **Interactive interview sessions** (Commit #9)
+- **Question-by-question answer collection** (Commit #9)
+- **Interview progress tracking and summaries** (Commit #9)
 
 ## Planned Features
 
@@ -52,7 +55,9 @@ AI-Interview-Coach/
 ├── requirements.txt
 ├── README.md
 ├── templates/
-│   └── index.html
+│   ├── index.html
+│   ├── interview.html
+│   └── interview_summary.html
 ├── static/
 │   ├── css/
 │   │   └── style.css
@@ -113,6 +118,16 @@ Then open http://127.0.0.1:5000/ in your browser.
 5. **Analyze Job Description**: Enter a job title and paste a job description
 6. **View Job Results**: See required skills, preferred skills, programming languages, frameworks, tools, databases, education, experience, responsibilities, qualifications, and keywords
 7. **Generate Questions**: Choose an interview type, difficulty, and 5, 10, or 15 questions, then generate a personalized question set
+8. **Start an Interview**: Start the generated set, answer one question at a time, and submit each answer
+9. **Review the Summary**: After the final answer, review every submitted answer. This commit does not score or evaluate answers.
+
+## Interactive Interview Sessions (Commit #9)
+
+The generator stores the server-owned questions and stable IDs in the Flask session. Starting an interview creates a fresh temporary state containing the question list, current index, metadata, and answer records. The `/interview` page renders only the current question, while `/submit-answer` validates the submitted question ID and answer before advancing. Refreshing the page keeps the current question and saved answers.
+
+After the final answer, the active state becomes a completed summary shown by `/finish-interview`. Starting another interview resets the answer collection and index. Flask's default signed cookie session is appropriate for this prototype because no database is needed yet; it is temporary and browser-scoped, but production use should move larger or sensitive records to server-side storage with authentication and expiration.
+
+The optional previous-question workflow is intentionally not included. A strictly forward flow keeps answer ownership and duplicate-submission behavior predictable until answer editing is needed.
 
 ## AI Interview Question Generator (Commit #8)
 

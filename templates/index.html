@@ -276,6 +276,9 @@
                 <p class="eyebrow">Your question set</p>
                 <h3 id="question-results-heading">Personalized Interview Questions</h3>
                 <div id="question-list" class="question-list"></div>
+                <form action="{{ url_for('start_interview') }}" method="post">
+                    <button class="primary-button start-interview-button" type="submit">Start Interview <span aria-hidden="true">&rarr;</span></button>
+                </form>
             </section>
         </section>
 

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Summary | AI Interview Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
+        <nav aria-label="Main navigation"><a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a></nav>
+    </header>
+    <main>
+        <section class="interview-page summary-page">
+            <p class="eyebrow">Interview Completed!</p>
+            <h1>You answered <span>{{ answers|length }} out of {{ total_questions }}</span> questions.</h1>
+            <p class="upload-instructions">Here are the answers you submitted. No scores or feedback have been generated.</p>
+            <div class="summary-list">
+                {% for item in answers %}
+                    <article class="summary-card">
+                        <p class="question-number">Question {{ item.question_id }}</p>
+                        <h2>{{ item.question }}</h2>
+                        <p class="summary-label">Answer</p>
+                        <p class="submitted-answer">{{ item.answer }}</p>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+    <footer><p>&copy; <span id="current-year"></span> AI Interview Coach</p></footer>
+    <script>
+        document.querySelector("#current-year").textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>

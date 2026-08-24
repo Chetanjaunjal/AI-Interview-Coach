@@ -18,6 +18,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
+MAX_ANSWER_LENGTH = 10000
 
 
 def extract_text_from_pdf(file_path):
@@ -274,12 +275,150 @@ def generate_questions_api():
             data.get("difficulty"),
             data.get("number_of_questions"),
         )
+        if result.get("success"):
+            questions = [
+                {"id": index + 1, **question}
+                for index, question in enumerate(result.get("questions", []))
+            ]
+            session["generated_questions"] = questions
+            session["generated_interview_config"] = {
+                "interview_type": data.get("interview_type"),
+                "difficulty": data.get("difficulty"),
+                "total_questions": len(questions),
+            }
+            result["questions"] = questions
         return jsonify(result), 200 if result.get("success") else 400
     except Exception:
         return jsonify({
             "success": False,
             "error": "Unable to generate interview questions right now. Please try again.",
         }), 500
+
+
+@app.route("/start-interview", methods=["POST"])
+def start_interview():
+    """Start a fresh interview from the server-owned generated questions."""
+    questions = session.get("generated_questions")
+    config = session.get("generated_interview_config")
+    if not isinstance(questions, list) or not questions or not isinstance(config, dict):
+        flash("Please generate interview questions first.", "error")
+        return redirect(url_for("home"))
+
+    session["interview"] = {
+        "questions": questions,
+        "current_index": 0,
+        "answers": [],
+        "interview_type": config.get("interview_type"),
+        "difficulty": config.get("difficulty"),
+        "total_questions": len(questions),
+    }
+    session.pop("completed_interview", None)
+    return redirect(url_for("interview"))
+
+
+@app.route("/interview", methods=["GET"])
+def interview():
+    """Display the current question from the active interview session."""
+    interview_state = session.get("interview")
+    if not _valid_interview_state(interview_state):
+        flash("Please start an interview first.", "error")
+        return redirect(url_for("home"))
+
+    current_index = interview_state["current_index"]
+    if current_index >= len(interview_state["questions"]):
+        return redirect(url_for("finish_interview"))
+
+    return render_template(
+        "interview.html",
+        question=interview_state["questions"][current_index],
+        current_index=current_index,
+        total_questions=len(interview_state["questions"]),
+        answer=_answer_for_question(interview_state, interview_state["questions"][current_index]["id"]),
+        error=None,
+    )
+
+
+@app.route("/submit-answer", methods=["POST"])
+def submit_answer():
+    """Validate and save one answer, then advance to the next question."""
+    interview_state = session.get("interview")
+    if not _valid_interview_state(interview_state):
+        flash("Please start an interview first.", "error")
+        return redirect(url_for("home"))
+
+    current_question = interview_state["questions"][interview_state["current_index"]]
+    question_id = request.form.get("question_id", "")
+    answer = request.form.get("answer", "")
+    if str(current_question["id"]) != question_id:
+        return _render_interview_error(interview_state, "That question is no longer current. Please continue with the current question.", 400)
+    if not answer.strip():
+        return _render_interview_error(interview_state, "Please provide an answer before continuing.", 400)
+    if len(answer) > MAX_ANSWER_LENGTH:
+        return _render_interview_error(interview_state, "Your answer is too long. Please keep it under 10,000 characters.", 400)
+    if _answer_for_question(interview_state, current_question["id"]) is not None:
+        return _render_interview_error(interview_state, "This answer was already submitted. Please continue with the current question.", 400)
+
+    interview_state["answers"].append({
+        "question_id": current_question["id"],
+        "question": current_question["question"],
+        "answer": answer.strip(),
+        "category": current_question["category"],
+        "difficulty": current_question["difficulty"],
+    })
+    interview_state["current_index"] += 1
+    session["interview"] = interview_state
+    if interview_state["current_index"] >= len(interview_state["questions"]):
+        session["completed_interview"] = interview_state
+        session.pop("interview", None)
+        return redirect(url_for("finish_interview"))
+    return redirect(url_for("interview"))
+
+
+@app.route("/finish-interview", methods=["GET"])
+def finish_interview():
+    """Display the submitted answers without evaluating them."""
+    completed = session.get("completed_interview")
+    if not _valid_interview_state(completed) or completed["current_index"] < len(completed["questions"]):
+        flash("Complete an interview before viewing its summary.", "error")
+        return redirect(url_for("home"))
+    return render_template(
+        "interview_summary.html",
+        answers=completed["answers"],
+        total_questions=len(completed["questions"]),
+    )
+
+
+def _valid_interview_state(interview_state):
+    """Check the minimum server-owned shape required by interview routes."""
+    return (
+        isinstance(interview_state, dict)
+        and isinstance(interview_state.get("questions"), list)
+        and bool(interview_state["questions"])
+        and isinstance(interview_state.get("answers"), list)
+        and isinstance(interview_state.get("current_index"), int)
+        and 0 <= interview_state["current_index"] <= len(interview_state["questions"])
+    )
+
+
+def _answer_for_question(interview_state, question_id):
+    """Find an existing answer by stable question ID."""
+    return next(
+        (answer for answer in interview_state["answers"] if answer.get("question_id") == question_id),
+        None,
+    )
+
+
+def _render_interview_error(interview_state, error, status_code):
+    current_index = interview_state["current_index"]
+    question = interview_state["questions"][current_index]
+    return render_template(
+        "interview.html",
+        question=question,
+        current_index=current_index,
+        total_questions=len(interview_state["questions"]),
+        answer=_answer_for_question(interview_state, question["id"]),
+        error=error,
+    ), status_code
 
 
 @app.route("/")
