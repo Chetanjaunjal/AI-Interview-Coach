@@ -9,7 +9,7 @@
 <body>
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
-        <nav aria-label="Main navigation"><a href="{{ url_for('home') }}">Exit Interview</a></nav>
+        <nav aria-label="Main navigation"><a href="{{ url_for('history') }}">History</a><form action="{{ url_for('logout') }}" method="post"><button class="text-button" type="submit">Log Out</button></form></nav>
     </header>
     <main>
         <section class="interview-page">

@@ -181,6 +181,34 @@ The save operation inserts the interview, questions, and answers in one transact
 
 The analytics module remains the single owner of performance calculations. Persisted evaluations are reconstructed into the same input shape used by the current dashboard, so historical dashboards use the same scoring rules.
 
+## Authentication (Commit #13)
+
+Users can register, log in, log out, view their profile, and access only their own interview history. Passwords are stored as Werkzeug password hashes with salts, never as plain text. A minimum length helps resist guessing attacks; password hashes and passwords are never placed in the Flask session.
+
+Private routes use the reusable `login_required` decorator. The session contains only `user_id`; each request resolves the current user from SQLite. Interview queries filter by both interview ID and user ID, so changing an ID in the URL cannot expose another user's record. User IDs always come from the authenticated session, never from a form.
+
+### Database relationships
+
+```text
+users
+  |
+  | 1:N
+  v
+interviews
+  |
+  | 1:N
+  v
+questions
+  |
+  | 1:1
+  v
+answers
+```
+
+The Commit #12 migration adds `users`, adds `interviews.user_id`, and assigns existing ownerless interviews to `legacy@local.invalid`. That account has a random unusable password and is not a normal login account, so old data is preserved without silently assigning it to a real user. New interviews require an authenticated user and use a foreign-key relationship.
+
+Parameterized SQL prevents input from being interpreted as SQL commands. Generic login errors avoid revealing whether an email is registered. Logout clears the session with POST, and protected routes redirect unauthenticated visitors to `/login`.
+
 ## AI Interview Question Generator (Commit #8)
 
 After resume analysis, job analysis, and matching, the generator sends the LLM only the relevant structured context: candidate skills, projects, experience, certifications, education, job requirements, responsibilities, matched skills, and missing skills. It does not resend the full resume or job description, which reduces token usage, API cost, and response time.

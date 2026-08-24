@@ -5,6 +5,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
+from werkzeug.security import generate_password_hash
 
 
 class DatabaseError(Exception):
@@ -40,7 +41,9 @@ def init_database(app=None):
                     total_questions INTEGER NOT NULL CHECK (total_questions > 0),
                     overall_score REAL CHECK (overall_score IS NULL OR overall_score BETWEEN 0 AND 10),
                     started_at TEXT NOT NULL,
-                    completed_at TEXT NOT NULL
+                    completed_at TEXT NOT NULL,
+                    user_id INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
 
                 CREATE TABLE IF NOT EXISTS questions (
@@ -73,6 +76,29 @@ def init_database(app=None):
                 CREATE INDEX IF NOT EXISTS idx_interviews_completed_at ON interviews(completed_at);
                 """
             )
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(interviews)")}
+            if "user_id" not in columns:
+                connection.execute("ALTER TABLE interviews ADD COLUMN user_id INTEGER")
+            legacy = connection.execute("SELECT id FROM users WHERE email = ?", ("legacy@local.invalid",)).fetchone()
+            if legacy is None:
+                cursor = connection.execute(
+                    "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                    ("Legacy Interviews", "legacy@local.invalid", generate_password_hash(os.urandom(32).hex(), method="pbkdf2:sha256"), _now()),
+                )
+                legacy_id = cursor.lastrowid
+            else:
+                legacy_id = legacy[0]
+            connection.execute("UPDATE interviews SET user_id = ? WHERE user_id IS NULL", (legacy_id,))
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_interviews_user_id ON interviews(user_id)")
     except sqlite3.Error as error:
         raise DatabaseError("Unable to initialize the interview database.") from error
 
@@ -104,7 +130,43 @@ def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def save_completed_interview(completed, performance, app=None):
+def create_user(name, email, password_hash, app=None):
+    name = _require_text(name, "name")
+    email = _require_text(email, "email").lower()
+    password_hash = _require_text(password_hash, "password_hash")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute(
+                "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                (name, email, password_hash, _now()),
+            )
+            return cursor.lastrowid
+    except sqlite3.IntegrityError as error:
+        raise ValueError("An account with this email already exists.") from error
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to create the account.") from error
+
+
+def get_user_by_email(email, app=None):
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT id, name, email, password_hash, created_at FROM users WHERE email = ?", (str(email or "").strip().lower(),)).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load the account.") from error
+
+
+def get_user_by_id(user_id, app=None):
+    value = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT id, name, email, created_at FROM users WHERE id = ?", (value,)).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load the account.") from error
+
+
+def save_completed_interview(completed, performance, user_id=None, app=None):
     if not isinstance(completed, dict) or not isinstance(performance, dict):
         raise ValueError("Invalid completed interview data")
     questions = completed.get("questions")
@@ -113,6 +175,11 @@ def save_completed_interview(completed, performance, app=None):
         raise ValueError("An interview must include questions and answers")
     interview_type = _require_text(completed.get("interview_type"), "interview_type")
     difficulty = _require_text(completed.get("difficulty"), "difficulty")
+    if app is None and hasattr(user_id, "config"):
+        app = user_id
+        legacy_user = get_user_by_email("legacy@local.invalid", app)
+        user_id = legacy_user["id"] if legacy_user else None
+    user_id = _valid_id(user_id)
     started_at = completed.get("started_at") or _now()
     completed_at = _now()
     overall_score = _score(performance.get("overall_score"), "overall_score")
@@ -121,8 +188,8 @@ def save_completed_interview(completed, performance, app=None):
     try:
         with get_db_connection(app) as connection:
             cursor = connection.execute(
-                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at),
+                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at, user_id),
             )
             interview_id = cursor.lastrowid
             for order, question in enumerate(questions, start=1):
@@ -164,6 +231,15 @@ def get_all_interviews(app=None):
         raise DatabaseError("Unable to load interview history.") from error
 
 
+def get_user_interviews(user_id, app=None):
+    value = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return [dict(row) for row in connection.execute("SELECT * FROM interviews WHERE user_id = ? ORDER BY completed_at DESC, id DESC", (value,))]
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load interview history.") from error
+
+
 def _valid_id(interview_id):
     try:
         value = int(interview_id)
@@ -174,7 +250,23 @@ def _valid_id(interview_id):
     return value
 
 
+def get_user_interview(interview_id, user_id, app=None):
+    value = _valid_id(interview_id)
+    owner_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT * FROM interviews WHERE id = ? AND user_id = ?", (value, owner_id)).fetchone()
+            if row is None:
+                return None
+            interview = dict(row)
+            interview["questions"] = [dict(item) for item in connection.execute("SELECT q.*, a.* FROM questions q LEFT JOIN answers a ON a.question_id = q.id WHERE q.interview_id = ? ORDER BY q.question_order", (value,))]
+            return interview
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load the interview.") from error
+
+
 def get_interview(interview_id, app=None):
+    """Compatibility helper retained for non-authenticated migration tooling."""
     value = _valid_id(interview_id)
     try:
         with get_db_connection(app) as connection:
@@ -203,7 +295,19 @@ def get_question_answers(question_id, app=None):
         raise DatabaseError("Unable to load the answer.") from error
 
 
+def delete_user_interview(interview_id, user_id, app=None):
+    value = _valid_id(interview_id)
+    owner_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("DELETE FROM interviews WHERE id = ? AND user_id = ?", (value, owner_id))
+            return cursor.rowcount == 1
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to delete the interview.") from error
+
+
 def delete_interview(interview_id, app=None):
+    """Compatibility helper retained for old local database tooling."""
     value = _valid_id(interview_id)
     try:
         with get_db_connection(app) as connection:

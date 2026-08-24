@@ -14,7 +14,7 @@
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
         <nav aria-label="Main navigation">
-            <a href="#how-it-works">How It Works</a>
+            {% if current_user %}<a href="{{ url_for('dashboard') }}">Dashboard</a><a href="{{ url_for('history') }}">History</a><form action="{{ url_for('logout') }}" method="post"><button class="text-button" type="submit">Log Out</button></form>{% else %}<a href="{{ url_for('login') }}">Log In</a><a href="{{ url_for('register') }}">Register</a>{% endif %}
             <a class="nav-cta" href="#interview-generator">Start Interview</a>
         </nav>
     </header>

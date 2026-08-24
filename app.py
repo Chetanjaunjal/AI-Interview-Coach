@@ -1,10 +1,12 @@
 import os
 import json
 from datetime import datetime, timezone
+from functools import wraps
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
 
 from ai.resume_analyzer import get_analyzer
@@ -15,9 +17,12 @@ from ai.answer_evaluator import evaluate_answer
 from analytics.interview_analytics import calculate_interview_performance
 from database.db import (
     DatabaseError,
-    delete_interview,
-    get_all_interviews,
-    get_interview,
+    create_user,
+    delete_user_interview,
+    get_user_by_email,
+    get_user_by_id,
+    get_user_interview,
+    get_user_interviews,
     init_database,
     save_completed_interview,
 )
@@ -32,6 +37,97 @@ app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
 app.config["DATABASE_PATH"] = os.path.join(app.root_path, "instance", "interview_coach.db")
 MAX_ANSWER_LENGTH = 10000
 init_database(app)
+
+
+def get_current_user():
+    user_id = session.get("user_id")
+    if user_id is None:
+        return None
+    try:
+        return get_user_by_id(user_id, app)
+    except (DatabaseError, ValueError):
+        session.pop("user_id", None)
+        return None
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if get_current_user() is None:
+            flash("Please log in to continue.", "error")
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped_view
+
+
+@app.context_processor
+def inject_current_user():
+    return {"current_user": get_current_user()}
+
+
+def _valid_email(email):
+    email = (email or "").strip().lower()
+    return bool(email and "@" in email and "." in email.split("@")[-1] and not email.startswith("@") and not email.endswith("@"))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirmation = request.form.get("confirmation", "")
+        if not name:
+            flash("Name is required.", "error")
+        elif not _valid_email(email):
+            flash("Please enter a valid email address.", "error")
+        elif len(password) < 8:
+            flash("Password must be at least 8 characters.", "error")
+        elif password != confirmation:
+            flash("Passwords do not match.", "error")
+        else:
+            try:
+                create_user(name, email, generate_password_hash(password), app)
+            except ValueError:
+                flash("An account with this email already exists.", "error")
+            except DatabaseError:
+                flash("We could not create your account right now.", "error")
+            else:
+                flash("Account created. Please log in.", "success")
+                return redirect(url_for("login"))
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        try:
+            user = get_user_by_email(email, app) if email and password else None
+        except DatabaseError:
+            user = None
+        if user is None or not check_password_hash(user["password_hash"], password):
+            flash("Invalid email or password.", "error")
+        else:
+            session.clear()
+            session["user_id"] = user["id"]
+            next_url = request.args.get("next", "")
+            return redirect(next_url if next_url.startswith("/") and not next_url.startswith("//") else url_for("dashboard"))
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    return render_template("profile.html", user=get_current_user())
 
 
 def extract_text_from_pdf(file_path):
@@ -65,6 +161,7 @@ def file_too_large(error):
 
 
 @app.route("/upload-resume", methods=["POST"])
+@login_required
 def upload_resume():
     """
     Handle resume file upload and text extraction.
@@ -106,6 +203,7 @@ def upload_resume():
 
 
 @app.route("/api/analyze-resume", methods=["POST"])
+@login_required
 def analyze_resume_api():
     """
     API endpoint to analyze extracted resume text.
@@ -155,6 +253,7 @@ def analyze_resume_api():
 
 
 @app.route("/api/analyze-job", methods=["POST"])
+@login_required
 def analyze_job_api():
     """
     API endpoint to analyze a job description.
@@ -200,6 +299,7 @@ def analyze_job_api():
 
 
 @app.route("/api/match-resume", methods=["POST"])
+@login_required
 def match_resume_api():
     """
     API endpoint to match resume skills against job requirements.
@@ -258,6 +358,7 @@ def match_resume_api():
 
 
 @app.route("/api/generate-questions", methods=["POST"])
+@login_required
 def generate_questions_api():
     """Generate questions from the analyses and matching data in the session."""
     try:
@@ -309,6 +410,7 @@ def generate_questions_api():
 
 
 @app.route("/start-interview", methods=["POST"])
+@login_required
 def start_interview():
     """Start a fresh interview from the server-owned generated questions."""
     questions = session.get("generated_questions")
@@ -331,6 +433,7 @@ def start_interview():
 
 
 @app.route("/interview", methods=["GET"])
+@login_required
 def interview():
     """Display the current question from the active interview session."""
     interview_state = session.get("interview")
@@ -353,6 +456,7 @@ def interview():
 
 
 @app.route("/submit-answer", methods=["POST"])
+@login_required
 def submit_answer():
     """Validate and save one answer, then advance to the next question."""
     interview_state = session.get("interview")
@@ -403,6 +507,7 @@ def submit_answer():
 
 
 @app.route("/next-question", methods=["POST"])
+@login_required
 def next_question():
     """Advance only after the current answer has been saved and evaluated or skipped."""
     interview_state = session.get("interview")
@@ -421,7 +526,7 @@ def next_question():
             total_questions=len(interview_state["questions"]),
         )
         try:
-            interview_id = save_completed_interview(interview_state, performance, app)
+            interview_id = save_completed_interview(interview_state, performance, session["user_id"], app)
             interview_state["database_id"] = interview_id
             session["completed_interview"] = interview_state
         except (DatabaseError, ValueError):
@@ -433,6 +538,7 @@ def next_question():
 
 
 @app.route("/finish-interview", methods=["GET"])
+@login_required
 def finish_interview():
     """Display the submitted answers without evaluating them."""
     completed = session.get("completed_interview")
@@ -447,24 +553,37 @@ def finish_interview():
 
 
 @app.route("/dashboard", methods=["GET"])
+@login_required
 def dashboard():
     """Render deterministic performance analytics for the completed interview."""
     completed = session.get("completed_interview")
-    if not _valid_interview_state(completed) or completed["current_index"] < len(completed["questions"]):
-        flash("No completed interview is available. Complete an interview to see your performance dashboard.", "error")
+    try:
+        saved_interviews = get_user_interviews(session["user_id"], app)
+    except DatabaseError:
+        flash("Your interview data is temporarily unavailable.", "error")
         return redirect(url_for("home"))
-    performance = calculate_interview_performance(
-        completed.get("answers", []),
-        total_questions=len(completed["questions"]),
-    )
-    return render_template("dashboard.html", performance=performance)
+    if _valid_interview_state(completed) and completed["current_index"] >= len(completed["questions"]):
+        performance = calculate_interview_performance(completed.get("answers", []), len(completed["questions"]))
+    elif saved_interviews:
+        saved = get_user_interview(saved_interviews[0]["id"], session["user_id"], app)
+        performance = _performance_for_saved_interview(saved)
+    else:
+        flash("Complete an interview to see your performance dashboard.", "error")
+        return redirect(url_for("home"))
+    stats = {
+        "total_interviews": len(saved_interviews),
+        "best_score": max((item["overall_score"] for item in saved_interviews if item["overall_score"] is not None), default=None),
+        "average_score": round(sum(item["overall_score"] for item in saved_interviews if item["overall_score"] is not None) / max(1, sum(item["overall_score"] is not None for item in saved_interviews)), 1),
+    }
+    return render_template("dashboard.html", performance=performance, user_stats=stats)
 
 
 @app.route("/history", methods=["GET"])
+@login_required
 def history():
     """Display all completed interviews stored in SQLite."""
     try:
-        interviews = get_all_interviews(app)
+        interviews = get_user_interviews(session["user_id"], app)
     except DatabaseError:
         flash("Interview history is temporarily unavailable.", "error")
         interviews = []
@@ -472,10 +591,11 @@ def history():
 
 
 @app.route("/history/<interview_id>", methods=["GET"])
+@login_required
 def interview_detail(interview_id):
     """Display one persisted interview and its submitted answers."""
     try:
-        saved_interview = get_interview(interview_id, app)
+        saved_interview = get_user_interview(interview_id, session["user_id"], app)
     except (DatabaseError, ValueError):
         saved_interview = None
     if saved_interview is None:
@@ -484,14 +604,20 @@ def interview_detail(interview_id):
 
 
 @app.route("/history/<interview_id>/dashboard", methods=["GET"])
+@login_required
 def history_dashboard(interview_id):
     """Reuse the existing analytics function for a persisted interview."""
     try:
-        saved_interview = get_interview(interview_id, app)
+        saved_interview = get_user_interview(interview_id, session["user_id"], app)
     except (DatabaseError, ValueError):
         saved_interview = None
     if saved_interview is None:
         return render_template("interview_not_found.html"), 404
+    performance = _performance_for_saved_interview(saved_interview)
+    return render_template("dashboard.html", performance=performance, history_interview=saved_interview)
+
+
+def _performance_for_saved_interview(saved_interview):
     answers = []
     for item in saved_interview["questions"]:
         evaluation = json.loads(item["evaluation_json"]) if item.get("evaluation_json") else None
@@ -499,15 +625,15 @@ def history_dashboard(interview_id):
         if evaluation:
             answer["evaluation"] = evaluation
         answers.append(answer)
-    performance = calculate_interview_performance(answers, saved_interview["total_questions"])
-    return render_template("dashboard.html", performance=performance, history_interview=saved_interview)
+    return calculate_interview_performance(answers, saved_interview["total_questions"])
 
 
 @app.route("/history/<interview_id>/delete", methods=["POST"])
+@login_required
 def delete_history_interview(interview_id):
     """Delete a persisted interview using POST only."""
     try:
-        deleted = delete_interview(interview_id, app)
+        deleted = delete_user_interview(interview_id, session["user_id"], app)
     except (DatabaseError, ValueError):
         deleted = False
     if not deleted:

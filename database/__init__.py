@@ -2,22 +2,24 @@
 
 from .db import (
     DatabaseError,
-    delete_interview,
-    get_all_interviews,
-    get_interview,
-    get_interview_questions,
-    get_question_answers,
+    create_user,
+    delete_user_interview,
+    get_user_by_email,
+    get_user_by_id,
+    get_user_interview,
+    get_user_interviews,
     init_database,
     save_completed_interview,
 )
 
 __all__ = [
     "DatabaseError",
-    "delete_interview",
-    "get_all_interviews",
-    "get_interview",
-    "get_interview_questions",
-    "get_question_answers",
+    "create_user",
+    "delete_user_interview",
+    "get_user_by_email",
+    "get_user_by_id",
+    "get_user_interview",
+    "get_user_interviews",
     "init_database",
     "save_completed_interview",
 ]
