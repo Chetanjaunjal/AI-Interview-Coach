@@ -10,6 +10,7 @@ from ai.resume_analyzer import get_analyzer
 from ai.job_analyzer import get_job_analyzer
 from ai.matcher import match_resume_to_job
 from ai.question_generator import generate_interview_questions
+from ai.answer_evaluator import evaluate_answer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -365,12 +366,44 @@ def submit_answer():
         "category": current_question["category"],
         "difficulty": current_question["difficulty"],
     })
-    interview_state["current_index"] += 1
     session["interview"] = interview_state
+    evaluation_result = evaluate_answer(
+        current_question["question"],
+        answer.strip(),
+        current_question["category"],
+        current_question["difficulty"],
+        current_question["topic"],
+        _evaluation_job_context(),
+    )
+    saved_answer = interview_state["answers"][-1]
+    if evaluation_result.get("success"):
+        saved_answer["evaluation"] = evaluation_result["evaluation"]
+        evaluation_error = None
+    else:
+        saved_answer["evaluation_error"] = evaluation_result.get(
+            "error", "Your answer was saved, but we could not evaluate it right now."
+        )
+        evaluation_error = "Your answer was saved, but we couldn't evaluate it right now. You can continue."
+    session["interview"] = interview_state
+    return _render_interview_result(interview_state, evaluation_error), 200
+
+
+@app.route("/next-question", methods=["POST"])
+def next_question():
+    """Advance only after the current answer has been saved and evaluated or skipped."""
+    interview_state = session.get("interview")
+    if not _valid_interview_state(interview_state):
+        flash("Please start an interview first.", "error")
+        return redirect(url_for("home"))
+    current_question = interview_state["questions"][interview_state["current_index"]]
+    if _answer_for_question(interview_state, current_question["id"]) is None:
+        return _render_interview_error(interview_state, "Submit an answer before continuing.", 400)
+    interview_state["current_index"] += 1
     if interview_state["current_index"] >= len(interview_state["questions"]):
         session["completed_interview"] = interview_state
         session.pop("interview", None)
         return redirect(url_for("finish_interview"))
+    session["interview"] = interview_state
     return redirect(url_for("interview"))
 
 
@@ -418,7 +451,32 @@ def _render_interview_error(interview_state, error, status_code):
         total_questions=len(interview_state["questions"]),
         answer=_answer_for_question(interview_state, question["id"]),
         error=error,
+        evaluation=None,
+        can_continue=False,
     ), status_code
+
+
+def _render_interview_result(interview_state, error=None):
+    """Render saved answer evaluation before allowing the next question."""
+    current_index = interview_state["current_index"]
+    question = interview_state["questions"][current_index]
+    saved_answer = _answer_for_question(interview_state, question["id"])
+    return render_template(
+        "interview.html",
+        question=question,
+        current_index=current_index,
+        total_questions=len(interview_state["questions"]),
+        answer=saved_answer,
+        error=error,
+        evaluation=saved_answer.get("evaluation") if saved_answer else None,
+        can_continue=True,
+    )
+
+
+def _evaluation_job_context():
+    """Return only job fields useful for evaluating the current answer."""
+    job_analysis = session.get("job_analysis", {})
+    return job_analysis.get("analysis", {}) if isinstance(job_analysis, dict) else {}
 
 
 @app.route("/")

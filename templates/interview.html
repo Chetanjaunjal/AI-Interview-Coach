@@ -29,14 +29,46 @@
 
             <article class="active-question">
                 <h2>{{ question.question }}</h2>
-                <form action="{{ url_for('submit_answer') }}" method="post">
-                    <input type="hidden" name="question_id" value="{{ question.id }}">
-                    <label for="answer">Your answer</label>
-                    <textarea id="answer" name="answer" rows="12" maxlength="10000" autofocus required>{{ answer.answer if answer else '' }}</textarea>
-                    <p class="answer-limit">Maximum 10,000 characters</p>
-                    <button class="primary-button" type="submit">Submit Answer <span aria-hidden="true">&rarr;</span></button>
-                </form>
+                {% if not can_continue %}
+                    <form action="{{ url_for('submit_answer') }}" method="post">
+                        <input type="hidden" name="question_id" value="{{ question.id }}">
+                        <label for="answer">Your answer</label>
+                        <textarea id="answer" name="answer" rows="12" maxlength="10000" autofocus required>{{ answer.answer if answer else '' }}</textarea>
+                        <p class="answer-limit">Maximum 10,000 characters</p>
+                        <button class="primary-button" type="submit">Submit Answer <span aria-hidden="true">&rarr;</span></button>
+                    </form>
+                {% endif %}
             </article>
+
+            {% if evaluation %}
+                <section class="evaluation-card" aria-labelledby="evaluation-heading">
+                    <p class="eyebrow">Answer Evaluation</p>
+                    <h2 id="evaluation-heading">Overall Score: <span>{{ evaluation.overall_score }} / 10</span></h2>
+                    <div class="evaluation-scores">
+                        <div><strong>Relevance</strong><span>{{ evaluation.relevance }} / 10</span></div>
+                        {% if evaluation.technical_correctness is defined %}
+                            <div><strong>Technical Correctness</strong><span>{{ evaluation.technical_correctness }} / 10</span></div>
+                        {% else %}
+                            <div><strong>Content Quality</strong><span>{{ evaluation.content_quality }} / 10</span></div>
+                        {% endif %}
+                        <div><strong>Completeness</strong><span>{{ evaluation.completeness }} / 10</span></div>
+                        <div><strong>Communication</strong><span>{{ evaluation.communication }} / 10</span></div>
+                    </div>
+                    <div class="evaluation-feedback">
+                        <div><h3>Strengths</h3><ul>{% for item in evaluation.strengths %}<li>{{ item }}</li>{% endfor %}</ul></div>
+                        <div><h3>Areas to Improve</h3><ul>{% for item in evaluation.weaknesses %}<li>{{ item }}</li>{% endfor %}</ul></div>
+                        <div><h3>Missing Points</h3><ul>{% for item in evaluation.missing_points %}<li>{{ item }}</li>{% endfor %}</ul></div>
+                        <div><h3>Suggested Improvement</h3><ul>{% for item in evaluation.improvement_suggestions %}<li>{{ item }}</li>{% endfor %}</ul></div>
+                    </div>
+                    <p class="model-feedback">{{ evaluation.model_feedback }}</p>
+                </section>
+            {% endif %}
+
+            {% if can_continue %}
+                <form action="{{ url_for('next_question') }}" method="post">
+                    <button class="primary-button" type="submit">{% if current_index + 1 == total_questions %}Finish Interview{% else %}Next Question{% endif %} <span aria-hidden="true">&rarr;</span></button>
+                </form>
+            {% endif %}
         </section>
     </main>
     <footer><p>&copy; <span id="current-year"></span> AI Interview Coach</p></footer>

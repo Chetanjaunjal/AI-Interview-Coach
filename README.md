@@ -27,6 +27,8 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - **Interactive interview sessions** (Commit #9)
 - **Question-by-question answer collection** (Commit #9)
 - **Interview progress tracking and summaries** (Commit #9)
+- **AI answer evaluation and structured feedback** (Commit #10)
+- **Rubric-based answer scoring** (Commit #10)
 
 ## Planned Features
 
@@ -119,7 +121,8 @@ Then open http://127.0.0.1:5000/ in your browser.
 6. **View Job Results**: See required skills, preferred skills, programming languages, frameworks, tools, databases, education, experience, responsibilities, qualifications, and keywords
 7. **Generate Questions**: Choose an interview type, difficulty, and 5, 10, or 15 questions, then generate a personalized question set
 8. **Start an Interview**: Start the generated set, answer one question at a time, and submit each answer
-9. **Review the Summary**: After the final answer, review every submitted answer. This commit does not score or evaluate answers.
+9. **Review Evaluation**: After submitting an answer, review its rubric scores and constructive feedback before moving to the next question.
+10. **Review the Summary**: After the final answer, review every submitted answer and its available evaluation. Later commits can add aggregate scoring.
 
 ## Interactive Interview Sessions (Commit #9)
 
@@ -128,6 +131,21 @@ The generator stores the server-owned questions and stable IDs in the Flask sess
 After the final answer, the active state becomes a completed summary shown by `/finish-interview`. Starting another interview resets the answer collection and index. Flask's default signed cookie session is appropriate for this prototype because no database is needed yet; it is temporary and browser-scoped, but production use should move larger or sensitive records to server-side storage with authentication and expiration.
 
 The optional previous-question workflow is intentionally not included. A strictly forward flow keeps answer ownership and duplicate-submission behavior predictable until answer editing is needed.
+
+## AI Answer Evaluation (Commit #10)
+
+Each submitted answer is saved first, then evaluated against its server-owned question. The evaluator receives only the current question, answer, category, difficulty, topic, and relevant job requirements. Technical questions use relevance, technical correctness, completeness, and communication. HR and behavioral questions replace technical correctness with content quality; behavioral answers may use STAR as a helpful lens without requiring a rigid format.
+
+The LLM returns individual rubric scores from 0 to 10 plus strengths, weaknesses, missing points, suggestions, and feedback. Python validates those fields and calculates the displayed score using configurable weights:
+
+```text
+overall = relevance × 0.25
+         + correctness/content quality × 0.35
+         + completeness × 0.25
+         + communication × 0.15
+```
+
+The final score is rounded to one decimal place using deterministic decimal half-up rounding. This makes the score explainable and prevents the LLM from arbitrarily choosing an overall result. LLM evaluation remains an approximation, not an objective measurement of a person’s ability. If the API fails or returns invalid JSON, the saved answer is preserved and the user can continue without evaluation.
 
 ## AI Interview Question Generator (Commit #8)
 

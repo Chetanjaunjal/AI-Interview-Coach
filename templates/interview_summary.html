@@ -23,6 +23,13 @@
                         <h2>{{ item.question }}</h2>
                         <p class="summary-label">Answer</p>
                         <p class="submitted-answer">{{ item.answer }}</p>
+                        {% if item.evaluation %}
+                            <p class="summary-label">Evaluation</p>
+                            <p class="submitted-answer">Overall Score: {{ item.evaluation.overall_score }} / 10. {{ item.evaluation.model_feedback }}</p>
+                        {% elif item.evaluation_error %}
+                            <p class="summary-label">Evaluation</p>
+                            <p class="submitted-answer">{{ item.evaluation_error }}</p>
+                        {% endif %}
                     </article>
                 {% endfor %}
             </div>

@@ -1,6 +1,7 @@
 """Commit #9 tests for the Flask-session interview workflow."""
 
 import unittest
+from unittest.mock import patch
 
 from app import app
 
@@ -9,6 +10,22 @@ class InterviewSessionTests(unittest.TestCase):
     def setUp(self):
         app.config.update(TESTING=True, SECRET_KEY="test-secret")
         self.client = app.test_client()
+        self.evaluation_patch = patch(
+            "app.evaluate_answer",
+            return_value={"success": True, "evaluation": {
+                "relevance": 8,
+                "technical_correctness": 8,
+                "completeness": 7,
+                "communication": 8,
+                "overall_score": 7.8,
+                "strengths": ["Clear"],
+                "weaknesses": [],
+                "missing_points": [],
+                "improvement_suggestions": [],
+                "model_feedback": "Good answer.",
+            }},
+        )
+        self.evaluation_patch.start()
         with self.client.session_transaction() as flask_session:
             flask_session.clear()
             flask_session["generated_questions"] = self.questions(5)
@@ -17,6 +34,9 @@ class InterviewSessionTests(unittest.TestCase):
                 "difficulty": "medium",
                 "total_questions": 5,
             }
+
+    def tearDown(self):
+        self.evaluation_patch.stop()
 
     @staticmethod
     def questions(count):
@@ -46,8 +66,10 @@ class InterviewSessionTests(unittest.TestCase):
             "/submit-answer",
             data={"question_id": "1", "answer": "My answer"},
         )
-        self.assertEqual(response.status_code, 302)
-        next_page = self.client.get(response.location)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"7.8 / 10", response.data)
+        next_response = self.client.post("/next-question")
+        next_page = self.client.get(next_response.location)
         self.assertIn(b"Question 2", next_page.data)
         with self.client.session_transaction() as flask_session:
             self.assertEqual(flask_session["interview"]["answers"][0]["question_id"], 1)
@@ -68,6 +90,8 @@ class InterviewSessionTests(unittest.TestCase):
                 "/submit-answer",
                 data={"question_id": str(index), "answer": f"Answer {index}"},
             )
+            self.assertEqual(response.status_code, 200)
+            response = self.client.post("/next-question")
         self.assertEqual(response.status_code, 302)
         summary = self.client.get(response.location)
         self.assertEqual(summary.status_code, 200)
@@ -81,7 +105,7 @@ class InterviewSessionTests(unittest.TestCase):
             "/submit-answer", data={"question_id": "1", "answer": "Saved answer"}
         )
         refreshed = self.client.get("/interview")
-        self.assertIn(b"Question 2", refreshed.data)
+        self.assertIn(b"Question 1", refreshed.data)
         with self.client.session_transaction() as flask_session:
             self.assertEqual(len(flask_session["interview"]["answers"]), 1)
 
@@ -97,6 +121,7 @@ class InterviewSessionTests(unittest.TestCase):
         self.client.post(
             "/submit-answer", data={"question_id": "1", "answer": "First answer"}
         )
+        self.client.post("/next-question")
         duplicate = self.client.post(
             "/submit-answer", data={"question_id": "1", "answer": "First answer"}
         )
@@ -132,6 +157,22 @@ class InterviewSessionTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"too long", response.data)
+
+    def test_evaluation_failure_keeps_answer_and_allows_continue(self):
+        self.evaluation_patch.stop()
+        with patch(
+            "app.evaluate_answer",
+            return_value={"success": False, "error": "Service unavailable"},
+        ):
+            self.client.post("/start-interview")
+            response = self.client.post(
+                "/submit-answer", data={"question_id": "1", "answer": "Saved"}
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Your answer was saved", response.data)
+            self.client.post("/next-question")
+        with self.client.session_transaction() as flask_session:
+            self.assertEqual(flask_session["interview"]["answers"][0]["answer"], "Saved")
 
 
 if __name__ == "__main__":
