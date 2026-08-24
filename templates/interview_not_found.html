@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Not Found | AI Interview Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="site-header"><a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a></header>
+    <main><section class="history-page empty-state"><p class="eyebrow">Interview History</p><h1>Interview <span>not found</span></h1><p class="upload-instructions">That interview does not exist or is no longer available.</p><a class="primary-button" href="{{ url_for('history') }}">Back to History <span aria-hidden="true">&rarr;</span></a></section></main>
+</body>
+</html>

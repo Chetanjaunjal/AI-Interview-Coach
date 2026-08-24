@@ -57,6 +57,123 @@ nav a:hover {
     color: var(--ink);
 }
 
+.history-page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 70px 32px 110px;
+}
+
+.history-page h1 {
+    font-size: clamp(3rem, 7vw, 6rem);
+}
+
+.history-table-wrap {
+    margin-top: 48px;
+    overflow-x: auto;
+    background: var(--surface);
+    border-top: 3px solid var(--ink);
+}
+
+.history-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.history-table th,
+.history-table td {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+}
+
+.history-table th {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.history-actions {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.history-actions a,
+.history-actions button,
+.secondary-link {
+    color: var(--accent-dark);
+    font: inherit;
+    font-weight: 700;
+}
+
+.history-actions button {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.empty-state {
+    margin-top: 48px;
+    padding: 48px 0;
+    border-top: 1px solid var(--line);
+}
+
+.empty-state h2 {
+    font-size: 2rem;
+}
+
+.empty-state .primary-button {
+    margin-top: 28px;
+}
+
+.detail-meta {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    margin: 48px 0;
+    background: var(--line);
+}
+
+.detail-meta div {
+    display: grid;
+    gap: 8px;
+    padding: 22px;
+    background: var(--surface);
+}
+
+.detail-meta strong {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.secondary-link {
+    display: inline-block;
+    margin: 20px 0 0 20px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 720px) {
+    .detail-meta {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 .nav-cta {
     padding: 11px 17px;
     color: var(--ink);

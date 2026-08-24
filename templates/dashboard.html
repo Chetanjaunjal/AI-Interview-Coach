@@ -11,6 +11,8 @@
         <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
         <nav aria-label="Main navigation">
             <a href="{{ url_for('finish_interview') }}">Answer Summary</a>
+            <a href="{{ url_for('history') }}">History</a>
+            {% if history_interview %}<a href="{{ url_for('interview_detail', interview_id=history_interview.id) }}">Interview Details</a>{% endif %}
             <a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a>
         </nav>
     </header>

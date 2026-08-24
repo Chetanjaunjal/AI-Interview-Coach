@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import datetime, timezone
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from pypdf import PdfReader
@@ -12,6 +13,14 @@ from ai.matcher import match_resume_to_job
 from ai.question_generator import generate_interview_questions
 from ai.answer_evaluator import evaluate_answer
 from analytics.interview_analytics import calculate_interview_performance
+from database.db import (
+    DatabaseError,
+    delete_interview,
+    get_all_interviews,
+    get_interview,
+    init_database,
+    save_completed_interview,
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,7 +29,9 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
+app.config["DATABASE_PATH"] = os.path.join(app.root_path, "instance", "interview_coach.db")
 MAX_ANSWER_LENGTH = 10000
+init_database(app)
 
 
 def extract_text_from_pdf(file_path):
@@ -313,6 +324,7 @@ def start_interview():
         "interview_type": config.get("interview_type"),
         "difficulty": config.get("difficulty"),
         "total_questions": len(questions),
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     session.pop("completed_interview", None)
     return redirect(url_for("interview"))
@@ -404,6 +416,17 @@ def next_question():
     if interview_state["current_index"] >= len(interview_state["questions"]):
         session["completed_interview"] = interview_state
         session.pop("interview", None)
+        performance = calculate_interview_performance(
+            interview_state.get("answers", []),
+            total_questions=len(interview_state["questions"]),
+        )
+        try:
+            interview_id = save_completed_interview(interview_state, performance, app)
+            interview_state["database_id"] = interview_id
+            session["completed_interview"] = interview_state
+        except (DatabaseError, ValueError):
+            flash("We could not save this interview, but your completed summary is still available.", "error")
+            return redirect(url_for("finish_interview"))
         return redirect(url_for("finish_interview"))
     session["interview"] = interview_state
     return redirect(url_for("interview"))
@@ -435,6 +458,63 @@ def dashboard():
         total_questions=len(completed["questions"]),
     )
     return render_template("dashboard.html", performance=performance)
+
+
+@app.route("/history", methods=["GET"])
+def history():
+    """Display all completed interviews stored in SQLite."""
+    try:
+        interviews = get_all_interviews(app)
+    except DatabaseError:
+        flash("Interview history is temporarily unavailable.", "error")
+        interviews = []
+    return render_template("history.html", interviews=interviews)
+
+
+@app.route("/history/<interview_id>", methods=["GET"])
+def interview_detail(interview_id):
+    """Display one persisted interview and its submitted answers."""
+    try:
+        saved_interview = get_interview(interview_id, app)
+    except (DatabaseError, ValueError):
+        saved_interview = None
+    if saved_interview is None:
+        return render_template("interview_not_found.html"), 404
+    return render_template("interview_detail.html", interview=saved_interview)
+
+
+@app.route("/history/<interview_id>/dashboard", methods=["GET"])
+def history_dashboard(interview_id):
+    """Reuse the existing analytics function for a persisted interview."""
+    try:
+        saved_interview = get_interview(interview_id, app)
+    except (DatabaseError, ValueError):
+        saved_interview = None
+    if saved_interview is None:
+        return render_template("interview_not_found.html"), 404
+    answers = []
+    for item in saved_interview["questions"]:
+        evaluation = json.loads(item["evaluation_json"]) if item.get("evaluation_json") else None
+        answer = {"category": item["category"], "topic": item["topic"], "answer": item.get("answer_text")}
+        if evaluation:
+            answer["evaluation"] = evaluation
+        answers.append(answer)
+    performance = calculate_interview_performance(answers, saved_interview["total_questions"])
+    return render_template("dashboard.html", performance=performance, history_interview=saved_interview)
+
+
+@app.route("/history/<interview_id>/delete", methods=["POST"])
+def delete_history_interview(interview_id):
+    """Delete a persisted interview using POST only."""
+    try:
+        deleted = delete_interview(interview_id, app)
+    except (DatabaseError, ValueError):
+        deleted = False
+    if not deleted:
+        flash("Interview not found or could not be deleted.", "error")
+    else:
+        flash("Interview deleted.", "success")
+    return redirect(url_for("history"))
 
 
 def _valid_interview_state(interview_state):

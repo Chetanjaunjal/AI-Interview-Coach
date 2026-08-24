@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview History | AI Interview Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
+        <nav aria-label="Main navigation"><a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a></nav>
+    </header>
+    <main>
+        <section class="history-page">
+            <p class="eyebrow">Persistent Practice</p>
+            <h1>Interview <span>History</span></h1>
+            <p class="upload-instructions">Your completed interviews remain available after you start a new one.</p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}<p class="analysis-status {{ category }}" role="status">{{ message }}</p>{% endfor %}
+            {% endwith %}
+            {% if interviews %}
+                <div class="history-table-wrap">
+                    <table class="history-table">
+                        <thead><tr><th>Date</th><th>Type</th><th>Difficulty</th><th>Questions</th><th>Score</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                        <tbody>
+                            {% for interview in interviews %}
+                                <tr>
+                                    <td>{{ interview.completed_at[:10] }}</td>
+                                    <td>{{ interview.interview_type|title }}</td>
+                                    <td>{{ interview.difficulty|title }}</td>
+                                    <td>{{ interview.total_questions }}</td>
+                                    <td>{{ interview.overall_score if interview.overall_score is not none else 'N/A' }} / 10</td>
+                                    <td class="history-actions"><a href="{{ url_for('interview_detail', interview_id=interview.id) }}">View</a><form action="{{ url_for('delete_history_interview', interview_id=interview.id) }}" method="post"><button type="submit">Delete</button></form></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state"><h2>No completed interviews yet</h2><p>Finish an interview to start building your history.</p><a class="primary-button" href="{{ url_for('home') }}#interview-generator">Start an Interview <span aria-hidden="true">&rarr;</span></a></div>
+            {% endif %}
+        </section>
+    </main>
+    <footer><p>&copy; <span id="current-year"></span> AI Interview Coach</p></footer>
+    <script>document.querySelector("#current-year").textContent = new Date().getFullYear();</script>
+</body>
+</html>

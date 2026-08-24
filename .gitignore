@@ -28,6 +28,9 @@ Thumbs.db
 # Uploaded files (can be large)
 uploads/
 
+# Local SQLite database
+instance/*.db
+
 # Testing and coverage
 .pytest_cache/
 htmlcov/

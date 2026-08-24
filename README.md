@@ -157,6 +157,30 @@ The dashboard aggregates the individual evaluation records already stored in the
 
 Strong areas use a configurable default threshold of `8.0`; weak areas use `6.0`. Topic classifications require at least two evaluated questions by default, so one question is displayed but not treated as proof that a topic is strong or weak. Invalid or missing evaluations remain counted as answered but are excluded from score averages. The dashboard uses temporary Flask session data, so it can disappear when the session expires or a new interview replaces the completed snapshot. Persistent history belongs in a future database-backed feature.
 
+## Persistent Interview History (Commit #12)
+
+Completed interviews are stored in SQLite at `instance/interview_coach.db`. Flask session data still holds the active interview temporarily, but the database becomes the source of truth after the final answer is submitted. Open `/history` to review completed interviews, inspect an individual record, open its dashboard, or delete it.
+
+### Database schema
+
+```text
+interviews
+  |
+  | 1:N
+  v
+questions
+  |
+  | 1:1
+  v
+answers
+```
+
+An interview has many questions, and each question has one answer in this version. Primary keys identify records and foreign keys connect them. Answers are separate from questions so interview and question data are not duplicated in every answer row. `ON DELETE CASCADE` removes questions and answers when their interview is deleted.
+
+The save operation inserts the interview, questions, and answers in one transaction. A failure triggers rollback, preventing an incomplete interview from appearing in history. The SQLite layer uses parameterized SQL (`?` placeholders), which keeps values separate from SQL commands and prevents SQL injection. SQLite is built into Python, needs no separate server, and is a good fit for this single-user student project. `python3 init_db.py` can initialize the tables explicitly; the Flask app also creates missing tables without resetting existing data.
+
+The analytics module remains the single owner of performance calculations. Persisted evaluations are reconstructed into the same input shape used by the current dashboard, so historical dashboards use the same scoring rules.
+
 ## AI Interview Question Generator (Commit #8)
 
 After resume analysis, job analysis, and matching, the generator sends the LLM only the relevant structured context: candidate skills, projects, experience, certifications, education, job requirements, responsibilities, matched skills, and missing skills. It does not resend the full resume or job description, which reduces token usage, API cost, and response time.

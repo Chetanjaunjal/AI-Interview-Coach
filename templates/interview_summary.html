@@ -17,6 +17,7 @@
             <h1>You answered <span>{{ answers|length }} out of {{ total_questions }}</span> questions.</h1>
             <p class="upload-instructions">Here are the answers and evaluations from this interview.</p>
             <a class="primary-button" href="{{ url_for('dashboard') }}">View Performance Dashboard <span aria-hidden="true">&rarr;</span></a>
+            {% if session.get('completed_interview', {}).get('database_id') %}<a class="secondary-link" href="{{ url_for('history') }}">View Interview History</a>{% endif %}
             <div class="summary-list">
                 {% for item in answers %}
                     <article class="summary-card">
