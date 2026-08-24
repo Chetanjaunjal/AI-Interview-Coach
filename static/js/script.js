@@ -33,6 +33,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (matchButton) {
         matchButton.addEventListener("click", handleMatchResume);
     }
+
+    const interviewSetupForm = document.querySelector("#interview-setup-form");
+    if (interviewSetupForm) {
+        interviewSetupForm.addEventListener("submit", handleGenerateQuestions);
+    }
 });
 
 /**
@@ -687,4 +692,63 @@ function displayMatchingResults(result) {
 
     // Show the entire results section
     matchingResults.style.display = "block";
+}
+
+async function handleGenerateQuestions(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const button = form.querySelector('button[type="submit"]');
+    const status = document.querySelector("#question-generation-status");
+    const results = document.querySelector("#question-results");
+    const questionList = document.querySelector("#question-list");
+    const numberOfQuestions = Number(document.querySelector("#number-of-questions").value);
+
+    button.disabled = true;
+    button.textContent = "Generating questions...";
+    status.textContent = "Generating personalized interview questions...";
+    status.className = "analysis-status loading";
+    status.style.display = "block";
+    results.style.display = "none";
+
+    try {
+        const response = await fetch("/api/generate-questions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                interview_type: document.querySelector("#interview-type").value,
+                difficulty: document.querySelector("#difficulty").value,
+                number_of_questions: numberOfQuestions
+            })
+        });
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.questions) && data.questions.length) {
+            questionList.innerHTML = data.questions.map((item, index) => `
+                <article class="question-card">
+                    <p class="question-number">Question ${index + 1}</p>
+                    <h4>${escapeHtml(item.question)}</h4>
+                    <dl>
+                        <div><dt>Category</dt><dd>${escapeHtml(item.category)}</dd></div>
+                        <div><dt>Difficulty</dt><dd>${escapeHtml(item.difficulty)}</dd></div>
+                        <div><dt>Topic</dt><dd>${escapeHtml(item.topic)}</dd></div>
+                        <div><dt>Why this question</dt><dd>${escapeHtml(item.reason)}</dd></div>
+                    </dl>
+                </article>
+            `).join("");
+            results.style.display = "block";
+            status.textContent = "Personalized questions generated.";
+            status.className = "analysis-status success";
+        } else {
+            status.textContent = data.error || "No interview questions were generated.";
+            status.className = "analysis-status error";
+        }
+    } catch (error) {
+        status.textContent = "Unable to generate questions. Please check your connection and try again.";
+        status.className = "analysis-status error";
+        console.error("Error generating questions:", error);
+    } finally {
+        button.disabled = false;
+        button.textContent = "Generate Questions";
+    }
 }

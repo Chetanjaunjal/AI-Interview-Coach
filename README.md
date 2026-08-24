@@ -23,12 +23,12 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - **Semantic skill matching using embeddings** (NEW - Commit #7)
 - **Hybrid exact + semantic matching** (NEW - Commit #7)
 - **Semantic similarity scoring** (NEW - Commit #7)
+- **Personalized AI interview question generation** (Commit #8)
 
 ## Planned Features
 
 - Resume upload and analysis
 - Target job and interview type selection
-- AI-generated interview questions
 - Practice answers and chatbot-style interaction
 - AI feedback and scoring
 - Interview history and an improvement roadmap
@@ -112,6 +112,15 @@ Then open http://127.0.0.1:5000/ in your browser.
 4. **View Resume Results**: See extracted information including name, email, skills, education, experience, projects, certifications, and achievements
 5. **Analyze Job Description**: Enter a job title and paste a job description
 6. **View Job Results**: See required skills, preferred skills, programming languages, frameworks, tools, databases, education, experience, responsibilities, qualifications, and keywords
+7. **Generate Questions**: Choose an interview type, difficulty, and 5, 10, or 15 questions, then generate a personalized question set
+
+## AI Interview Question Generator (Commit #8)
+
+After resume analysis, job analysis, and matching, the generator sends the LLM only the relevant structured context: candidate skills, projects, experience, certifications, education, job requirements, responsibilities, matched skills, and missing skills. It does not resend the full resume or job description, which reduces token usage, API cost, and response time.
+
+The backend validates the interview type (`technical`, `hr`, `behavioral`, or `mixed`), difficulty (`easy`, `medium`, or `hard`), and question count (5, 10, or 15). The LLM must return JSON containing unique questions with a category, difficulty, topic, and reason. The response is validated before the frontend renders it, and missing skills are used as knowledge-check topics rather than being presented as candidate experience.
+
+Difficulty expectations are simple: Easy covers fundamentals, Medium covers concepts, implementation, and projects, and Hard covers deep reasoning, architecture, optimization, trade-offs, and challenging scenarios.
 
 ## Job Description Analysis
 

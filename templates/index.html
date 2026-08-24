@@ -15,7 +15,7 @@
         <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
         <nav aria-label="Main navigation">
             <a href="#how-it-works">How It Works</a>
-            <a class="nav-cta" href="#start">Start Interview</a>
+            <a class="nav-cta" href="#interview-generator">Start Interview</a>
         </nav>
     </header>
 
@@ -233,6 +233,49 @@
                     <h4>📋 Recommendations</h4>
                     <ol id="recommendations-list" class="recommendations-list"></ol>
                 </div>
+            </section>
+        </section>
+
+        <section class="interview-generator" id="interview-generator">
+            <p class="eyebrow">Start AI Interview</p>
+            <h2>Practice the questions that matter.</h2>
+            <p class="upload-instructions">
+                Analyze your resume and target role first. Your questions will use that context and your skill gaps.
+            </p>
+
+            <form class="interview-setup-form" id="interview-setup-form">
+                <div class="form-group">
+                    <label for="interview-type">Interview Type</label>
+                    <select id="interview-type" name="interview_type">
+                        <option value="technical">Technical Interview</option>
+                        <option value="hr">HR Interview</option>
+                        <option value="behavioral">Behavioral Interview</option>
+                        <option value="mixed">Mixed Interview</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="difficulty">Difficulty</label>
+                    <select id="difficulty" name="difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="number-of-questions">Number of Questions</label>
+                    <select id="number-of-questions" name="number_of_questions">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                    </select>
+                </div>
+                <button class="primary-button" type="submit">Generate Questions</button>
+            </form>
+            <p id="question-generation-status" class="analysis-status" style="display:none;"></p>
+            <section id="question-results" class="question-results" aria-labelledby="question-results-heading" style="display:none;">
+                <p class="eyebrow">Your question set</p>
+                <h3 id="question-results-heading">Personalized Interview Questions</h3>
+                <div id="question-list" class="question-list"></div>
             </section>
         </section>
 

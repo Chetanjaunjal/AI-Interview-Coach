@@ -623,6 +623,103 @@ h2 {
     animation: fadeIn 0.3s ease;
 }
 
+.interview-generator {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 80px 32px;
+    border-top: 1px solid var(--line);
+}
+
+.interview-setup-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    max-width: 760px;
+    margin-top: 36px;
+}
+
+.interview-setup-form select {
+    padding: 14px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font: inherit;
+}
+
+.interview-setup-form .primary-button {
+    width: fit-content;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.question-results {
+    max-width: 900px;
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
+    animation: fadeIn 0.3s ease;
+}
+
+.question-results h3 {
+    margin: 18px 0 32px;
+    font-size: 1.7rem;
+}
+
+.question-list {
+    display: grid;
+    gap: 16px;
+}
+
+.question-card {
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+}
+
+.question-number {
+    margin: 0 0 12px;
+    color: var(--accent-dark);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.question-card h4 {
+    margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.25rem;
+    line-height: 1.35;
+}
+
+.question-card dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 24px 0 0;
+}
+
+.question-card dl div {
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+
+.question-card dt {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.question-card dd {
+    margin: 5px 0 0;
+    line-height: 1.5;
+}
+
 footer {
     padding: 24px 32px;
     color: var(--muted);
@@ -666,6 +763,15 @@ footer {
         grid-template-columns: 1fr;
         gap: 40px;
         margin-top: 60px;
+    }
+
+    .interview-generator {
+        padding: 70px 20px 80px;
+    }
+
+    .interview-setup-form,
+    .question-card dl {
+        grid-template-columns: 1fr;
     }
 
     footer {

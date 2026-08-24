@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from ai.resume_analyzer import get_analyzer
 from ai.job_analyzer import get_job_analyzer
 from ai.matcher import match_resume_to_job
+from ai.question_generator import generate_interview_questions
 
 # Load environment variables from .env file
 load_dotenv()
@@ -239,6 +240,45 @@ def match_resume_api():
         return jsonify({
             "success": False,
             "error": "An unexpected error occurred during matching. Please try again."
+        }), 500
+
+
+@app.route("/api/generate-questions", methods=["POST"])
+def generate_questions_api():
+    """Generate questions from the analyses and matching data in the session."""
+    try:
+        data = request.get_json(silent=True) or {}
+        resume_analysis = session.get("resume_analysis")
+        job_analysis = session.get("job_analysis")
+
+        if not resume_analysis:
+            return jsonify({
+                "success": False,
+                "error": "Resume has not been analyzed yet. Please analyze your resume first.",
+            }), 400
+        if not job_analysis:
+            return jsonify({
+                "success": False,
+                "error": "Job description has not been analyzed yet. Please analyze the job description first.",
+            }), 400
+
+        matching_result = match_resume_to_job(resume_analysis, job_analysis)
+        if not matching_result.get("success"):
+            return jsonify(matching_result), 400
+
+        result = generate_interview_questions(
+            resume_analysis.get("analysis"),
+            job_analysis.get("analysis"),
+            matching_result.get("result"),
+            data.get("interview_type"),
+            data.get("difficulty"),
+            data.get("number_of_questions"),
+        )
+        return jsonify(result), 200 if result.get("success") else 400
+    except Exception:
+        return jsonify({
+            "success": False,
+            "error": "Unable to generate interview questions right now. Please try again.",
         }), 500
 
 
