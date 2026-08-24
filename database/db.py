@@ -44,6 +44,7 @@ def init_database(app=None):
                     completed_at TEXT NOT NULL,
                     user_id INTEGER,
                     job_id INTEGER,
+                    interview_mode TEXT NOT NULL DEFAULT 'text',
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
                 );
@@ -70,6 +71,7 @@ def init_database(app=None):
                     overall_score REAL CHECK (overall_score IS NULL OR overall_score BETWEEN 0 AND 10),
                     feedback TEXT,
                     evaluation_json TEXT,
+                    voice_metrics_json TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
                 );
@@ -117,6 +119,11 @@ def init_database(app=None):
                 connection.execute("ALTER TABLE interviews ADD COLUMN user_id INTEGER")
             if "job_id" not in columns:
                 connection.execute("ALTER TABLE interviews ADD COLUMN job_id INTEGER")
+            if "interview_mode" not in columns:
+                connection.execute("ALTER TABLE interviews ADD COLUMN interview_mode TEXT NOT NULL DEFAULT 'text'")
+            answer_columns = {row[1] for row in connection.execute("PRAGMA table_info(answers)")}
+            if "voice_metrics_json" not in answer_columns:
+                connection.execute("ALTER TABLE answers ADD COLUMN voice_metrics_json TEXT")
             legacy = connection.execute("SELECT id FROM users WHERE email = ?", ("legacy@local.invalid",)).fetchone()
             if legacy is None:
                 cursor = connection.execute(
@@ -233,8 +240,8 @@ def save_completed_interview(completed, performance, user_id=None, app=None, job
     try:
         with get_db_connection(app) as connection:
             cursor = connection.execute(
-                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at, user_id, job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at, user_id, job_id),
+                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at, user_id, job_id, interview_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at, user_id, job_id, completed.get("interview_mode", "text")),
             )
             interview_id = cursor.lastrowid
             for order, question in enumerate(questions, start=1):
@@ -258,8 +265,8 @@ def save_completed_interview(completed, performance, user_id=None, app=None, job
                 )
                 feedback = evaluation.get("model_feedback") or answer.get("evaluation_error")
                 connection.execute(
-                    "INSERT INTO answers (question_id, answer_text, relevance_score, correctness_score, completeness_score, communication_score, overall_score, feedback, evaluation_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (cursor.lastrowid, answer_text, *scores, str(feedback) if feedback else None, json.dumps(evaluation) if evaluation else None, _now()),
+                    "INSERT INTO answers (question_id, answer_text, relevance_score, correctness_score, completeness_score, communication_score, overall_score, feedback, evaluation_json, voice_metrics_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (cursor.lastrowid, answer_text, *scores, str(feedback) if feedback else None, json.dumps(evaluation) if evaluation else None, json.dumps(answer.get("voice_metrics")) if isinstance(answer.get("voice_metrics"), dict) else None, _now()),
                 )
             return interview_id
     except (sqlite3.Error, ValueError, TypeError, json.JSONDecodeError) as error:
@@ -473,6 +480,8 @@ def get_user_interview(interview_id, user_id, app=None):
                 return None
             interview = dict(row)
             interview["questions"] = [dict(item) for item in connection.execute("SELECT q.*, a.* FROM questions q LEFT JOIN answers a ON a.question_id = q.id WHERE q.interview_id = ? ORDER BY q.question_order", (value,))]
+            for question in interview["questions"]:
+                question["voice_metrics"] = json.loads(question["voice_metrics_json"]) if question.get("voice_metrics_json") else None
             return interview
     except sqlite3.Error as error:
         raise DatabaseError("Unable to load the interview.") from error
@@ -488,6 +497,8 @@ def get_interview(interview_id, app=None):
                 return None
             interview = dict(row)
             interview["questions"] = [dict(item) for item in connection.execute("SELECT q.*, a.* FROM questions q LEFT JOIN answers a ON a.question_id = q.id WHERE q.interview_id = ? ORDER BY q.question_order", (value,))]
+            for question in interview["questions"]:
+                question["voice_metrics"] = json.loads(question["voice_metrics_json"]) if question.get("voice_metrics_json") else None
             return interview
     except sqlite3.Error as error:
         raise DatabaseError("Unable to load the interview.") from error

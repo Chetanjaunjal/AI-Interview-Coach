@@ -60,6 +60,16 @@ class DatabaseTests(unittest.TestCase):
         with get_db_connection(self.app) as connection:
             self.assertEqual(connection.execute("SELECT user_id FROM interviews WHERE id = ?", (interview_id,)).fetchone()[0], user_id)
 
+    def test_voice_mode_and_metrics_are_persisted(self):
+        user_id = create_user("Voice User", "voice@example.com", "hash", self.app)
+        completed = self.completed(1)
+        completed["interview_mode"] = "voice"
+        completed["answers"][0]["voice_metrics"] = {"duration": 14, "word_count": 28, "filler_count": 2}
+        interview_id = save_completed_interview(completed, {"overall_score": 8}, user_id, self.app)
+        saved = get_interview(interview_id, self.app)
+        self.assertEqual(saved["interview_mode"], "voice")
+        self.assertEqual(saved["questions"][0]["voice_metrics"]["filler_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

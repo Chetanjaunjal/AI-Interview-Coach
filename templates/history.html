@@ -22,12 +22,13 @@
             {% if interviews %}
                 <div class="history-table-wrap">
                     <table class="history-table">
-                        <thead><tr><th>Date</th><th>Type</th><th>Role</th><th>Difficulty</th><th>Questions</th><th>Score</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                        <thead><tr><th>Date</th><th>Type</th><th>Mode</th><th>Role</th><th>Difficulty</th><th>Questions</th><th>Score</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
                         <tbody>
                             {% for interview in interviews %}
                                 <tr>
                                     <td>{{ interview.completed_at[:10] }}</td>
                                     <td>{% if interview.interview_type == 'practice' %}Practice Session{% else %}{{ interview.interview_type|title }} Interview{% endif %}{% if interview.practice_topic %} &middot; {{ interview.practice_topic }}{% endif %}</td>
+                                    <td>{{ interview.interview_mode|title }}</td>
                                     <td>{{ interview.job_title or 'General preparation' }}</td>
                                     <td>{{ interview.difficulty|title }}</td>
                                     <td>{{ interview.total_questions }}</td>

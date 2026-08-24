@@ -234,6 +234,18 @@ Interview History -> Performance Analytics -> Weak Topics -> Missed Concepts
 
 Python calculates scores, trends, priorities, readiness, and study duration. The existing practice engine handles question generation and evaluation. The roadmap does not call external course APIs or invent learning resources. With no target job, it uses a neutral job-relevance baseline and clearly presents a general interview roadmap.
 
+## AI Voice Interview Mode (Commit #19)
+
+Voice mode uses the browser's native SpeechRecognition API when available and falls back to typed answers when it is not. SpeechSynthesis reads questions aloud only after the user clicks Play Question. The microphone activates only after Start Recording is clicked, and the user can stop, review, edit, and submit the transcript. Raw audio is not permanently stored.
+
+```text
+User Voice -> Speech Recognition -> Editable Transcript
+  -> Existing Interview Engine -> Existing AI Evaluation
+  -> Performance Analytics -> Personalized Roadmap
+```
+
+Voice sessions use the existing interview history with `interview_mode = 'voice'`. Approximate duration, word count, and filler-word counts are stored with answers, but never alter technical scores. Browser support, permission errors, empty speech, and long transcripts receive friendly messages. Filler detection uses word boundaries and neutral language; metrics are for practice, not professional speech assessment.
+
 ## AI Resume Tailoring (Commit #16)
 
 Resume tailoring combines a user's analyzed resume, a saved target job, resume-job matching, and keyword analysis before asking the existing LLM to improve wording and ordering. The original resume is stored separately and is never overwritten. Tailored versions are stored with the user, source resume, target job, generated content, and estimated ATS score.

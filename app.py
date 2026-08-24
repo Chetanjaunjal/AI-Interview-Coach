@@ -472,9 +472,58 @@ def start_interview():
         "previous_score": config.get("previous_score"),
         "job_id": config.get("job_id"),
         "job_title": config.get("job_title"),
+        "interview_mode": config.get("interview_mode", "text"),
     }
     session.pop("completed_interview", None)
     return redirect(url_for("interview"))
+
+
+@app.route("/voice-interview", methods=["GET"])
+@login_required
+def voice_interview():
+    try:
+        jobs = get_user_jobs(session["user_id"], app)
+    except DatabaseError:
+        jobs = []
+    return render_template("voice_interview.html", jobs=jobs)
+
+
+@app.route("/voice-interview/start", methods=["POST"])
+@login_required
+def start_voice_interview():
+    interview_type = request.form.get("interview_type", "technical").lower()
+    difficulty = request.form.get("difficulty", "medium").lower()
+    count = request.form.get("number_of_questions", type=int) or 5
+    if interview_type not in {"technical", "hr", "behavioral", "mixed"}:
+        interview_type = "technical"
+    if difficulty not in {"easy", "medium", "hard"}:
+        difficulty = "medium"
+    if count not in {5, 10, 15}:
+        count = 5
+    resume = session.get("resume_analysis") or {"success": True, "analysis": {"skills": []}}
+    job = session.get("job_analysis") or {"success": True, "analysis": {"job_title": "Interview practice"}}
+    matching = session.get("matching_result") or {"matched_required_skills": [], "missing_required_skills": []}
+    selected_job_id = request.form.get("job_id", type=int)
+    if selected_job_id:
+        try:
+            selected_job = get_user_job(selected_job_id, session["user_id"], app)
+        except (DatabaseError, ValueError):
+            selected_job = None
+        if selected_job:
+            job = {"success": True, "analysis": selected_job["analyzed_data"]}
+            session["job_id"] = selected_job["id"]
+            session["job_analysis"] = job
+            selected_matching = match_resume_to_job(resume, job) if resume.get("analysis", {}).get("skills") else None
+            matching = selected_matching.get("result", {}) if selected_matching and selected_matching.get("success") else {"matched_required_skills": [], "missing_required_skills": job["analysis"].get("required_skills", [])}
+        else:
+            matching = session.get("matching_result") or {"matched_required_skills": [], "missing_required_skills": []}
+    result = generate_interview_questions(resume.get("analysis", {}), job.get("analysis", {}), matching, interview_type, difficulty, count)
+    if not result.get("success"):
+        flash(result.get("error", "Generate interview questions before starting voice mode."), "error")
+        return redirect(url_for("voice_interview"))
+    session["generated_questions"] = [{"id": index + 1, **question} for index, question in enumerate(result["questions"])]
+    session["generated_interview_config"] = {"interview_type": interview_type, "difficulty": difficulty, "total_questions": count, "interview_mode": "voice", "job_id": session.get("job_id"), "job_title": job.get("analysis", {}).get("job_title")}
+    return redirect(url_for("start_interview"), code=307)
 
 
 @app.route("/practice", methods=["GET"])
@@ -699,7 +748,7 @@ def interview():
         return redirect(url_for("finish_interview"))
 
     return render_template(
-        "interview.html",
+        "voice_interview_session.html" if interview_state.get("interview_mode") == "voice" else "interview.html",
         question=interview_state["questions"][current_index],
         current_index=current_index,
         total_questions=len(interview_state["questions"]),
@@ -724,19 +773,27 @@ def submit_answer():
         return _render_interview_error(interview_state, "That question is no longer current. Please continue with the current question.", 400)
     if not answer.strip():
         return _render_interview_error(interview_state, "Please provide an answer before continuing.", 400)
-    if len(answer) > MAX_ANSWER_LENGTH:
-        return _render_interview_error(interview_state, "Your answer is too long. Please keep it under 10,000 characters.", 400)
+    answer_limit = 5000 if interview_state.get("interview_mode") == "voice" else MAX_ANSWER_LENGTH
+    if len(answer) > answer_limit:
+        return _render_interview_error(interview_state, f"Your answer is too long. Please keep it under {answer_limit:,} characters.", 400)
     if _answer_for_question(interview_state, current_question["id"]) is not None:
         return _render_interview_error(interview_state, "This answer was already submitted. Please continue with the current question.", 400)
 
-    interview_state["answers"].append({
+    answer_record = {
         "question_id": current_question["id"],
         "question": current_question["question"],
         "answer": answer.strip(),
         "category": current_question["category"],
         "difficulty": current_question["difficulty"],
         "topic": current_question.get("topic", "Unspecified topic"),
-    })
+    }
+    if interview_state.get("interview_mode") == "voice":
+        answer_record["voice_metrics"] = {
+            "duration": request.form.get("voice_duration", type=int) or 0,
+            "word_count": request.form.get("voice_word_count", type=int) or len(answer.strip().split()),
+            "filler_count": request.form.get("voice_filler_count", type=int) or 0,
+        }
+    interview_state["answers"].append(answer_record)
     session["interview"] = interview_state
     evaluation_result = evaluate_answer(
         current_question["question"],
@@ -803,6 +860,7 @@ def finish_interview():
         answers=completed["answers"],
         total_questions=len(completed["questions"]),
         performance=calculate_interview_performance(completed["answers"], len(completed["questions"])),
+        interview_mode=completed.get("interview_mode", "text"),
     )
 
 
@@ -975,7 +1033,7 @@ def _render_interview_error(interview_state, error, status_code):
     current_index = interview_state["current_index"]
     question = interview_state["questions"][current_index]
     return render_template(
-        "interview.html",
+        "voice_interview_session.html" if interview_state.get("interview_mode") == "voice" else "interview.html",
         question=question,
         current_index=current_index,
         total_questions=len(interview_state["questions"]),
