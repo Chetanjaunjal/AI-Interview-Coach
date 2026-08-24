@@ -26,6 +26,8 @@ class QuestionGenerator:
         interview_type: str,
         difficulty: str,
         number_of_questions: int,
+        focus_topic: Optional[str] = None,
+        weak_concepts: Optional[list[str]] = None,
     ) -> Dict[str, Any]:
         validation_error = validate_generation_inputs(
             resume_data,
@@ -34,6 +36,7 @@ class QuestionGenerator:
             interview_type,
             difficulty,
             number_of_questions,
+            focus_topic,
         )
         if validation_error:
             return {"success": False, "error": validation_error}
@@ -45,6 +48,8 @@ class QuestionGenerator:
             interview_type,
             difficulty,
             number_of_questions,
+            focus_topic,
+            weak_concepts,
         )
 
         try:
@@ -91,6 +96,7 @@ def validate_generation_inputs(
     interview_type: Any,
     difficulty: Any,
     number_of_questions: Any,
+    focus_topic: Optional[str] = None,
 ) -> Optional[str]:
     """Return a user-safe validation error, or None when inputs are valid."""
     if not isinstance(resume_data, dict) or not resume_data:
@@ -105,6 +111,8 @@ def validate_generation_inputs(
         return "Invalid difficulty. Choose easy, medium, or hard."
     if number_of_questions not in ALLOWED_QUESTION_COUNTS:
         return "Invalid question count. Choose 5, 10, or 15 questions."
+    if focus_topic is not None and (not isinstance(focus_topic, str) or not focus_topic.strip() or len(focus_topic) > 100):
+        return "Invalid practice topic."
     return None
 
 
@@ -115,6 +123,8 @@ def build_prompt(
     interview_type: str,
     difficulty: str,
     number_of_questions: int,
+    focus_topic: Optional[str] = None,
+    weak_concepts: Optional[list[str]] = None,
 ) -> str:
     """Build a compact prompt from structured analysis rather than raw documents."""
     context = {
@@ -144,6 +154,9 @@ def build_prompt(
         "medium": "Ask conceptual, implementation, and project-based questions.",
         "hard": "Ask deep reasoning, architecture, optimization, trade-off, and challenging scenario questions.",
     }
+    focus = ""
+    if focus_topic:
+        focus = f" Focus every question on the topic {focus_topic!r}. Target these previously missed concepts: {json.dumps(weak_concepts or [], ensure_ascii=True)}. Do not ask unrelated questions."
     return (
         f"Generate exactly {number_of_questions} unique questions for a {interview_type} "
         f"interview at {difficulty} difficulty. {difficulty_rules[difficulty]}\n"
@@ -153,7 +166,7 @@ def build_prompt(
         "Each item must have exactly these string fields: question, category, difficulty, topic, reason. "
         "Use category values Technical, HR, or Behavioral and set difficulty to the requested value. "
         "A reason must identify the supplied context behind the question. Return only JSON.\n\n"
-        f"CONTEXT:\n{json.dumps(context, ensure_ascii=True)}"
+        f"CONTEXT:\n{json.dumps(context, ensure_ascii=True)}{focus}"
     )
 
 
@@ -218,10 +231,12 @@ def generate_interview_questions(
     interview_type: str,
     difficulty: str,
     number_of_questions: int,
+    focus_topic: Optional[str] = None,
+    weak_concepts: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
     """Public function used by Flask and tests."""
     validation_error = validate_generation_inputs(
-        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions
+        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions, focus_topic
     )
     if validation_error:
         return {"success": False, "error": validation_error}
@@ -229,5 +244,5 @@ def generate_interview_questions(
     if not generator:
         return {"success": False, "error": "AI service is not configured. Please set OPENAI_API_KEY."}
     return generator.generate(
-        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions
+        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions, focus_topic, weak_concepts
     )

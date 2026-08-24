@@ -15,7 +15,7 @@
         <section class="history-page">
             <p class="eyebrow">Completed Interview</p>
             <h1>Interview <span>Details</span></h1>
-            <div class="detail-meta"><div><strong>Type</strong><span>{{ interview.interview_type|title }}</span></div><div><strong>Difficulty</strong><span>{{ interview.difficulty|title }}</span></div><div><strong>Date</strong><span>{{ interview.completed_at[:10] }}</span></div><div><strong>Overall Score</strong><span>{{ interview.overall_score if interview.overall_score is not none else 'N/A' }} / 10</span></div></div>
+            <div class="detail-meta"><div><strong>Type</strong><span>{% if interview.interview_type == 'practice' %}Practice Session{% else %}{{ interview.interview_type|title }} Interview{% endif %}</span></div><div><strong>Difficulty</strong><span>{{ interview.difficulty|title }}</span></div><div><strong>Date</strong><span>{{ interview.completed_at[:10] }}</span></div><div><strong>Overall Score</strong><span>{{ interview.overall_score if interview.overall_score is not none else 'N/A' }} / 10</span></div></div>
             <div class="summary-list">
                 {% for item in interview.questions %}
                     <article class="summary-card"><p class="question-number">Question {{ item.question_order }}</p><h2>{{ item.question_text }}</h2><p class="summary-label">Answer</p><p class="submitted-answer">{{ item.answer_text }}</p><p class="summary-label">Score</p><p class="submitted-answer">{{ item.overall_score if item.overall_score is not none else 'N/A' }} / 10</p>{% if item.feedback %}<p class="summary-label">Feedback</p><p class="submitted-answer">{{ item.feedback }}</p>{% endif %}</article>

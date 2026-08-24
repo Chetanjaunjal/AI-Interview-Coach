@@ -15,6 +15,7 @@ from ai.matcher import match_resume_to_job
 from ai.question_generator import generate_interview_questions
 from ai.answer_evaluator import evaluate_answer
 from analytics.interview_analytics import calculate_interview_performance
+from analytics.weakness_detector import detect_weak_topics
 from database.db import (
     DatabaseError,
     create_user,
@@ -341,6 +342,7 @@ def match_resume_api():
         matching_result = match_resume_to_job(resume_analysis, job_analysis)
 
         if matching_result.get("success"):
+            session["matching_result"] = matching_result.get("result", {})
             return jsonify({
                 "success": True,
                 "result": matching_result.get("result")
@@ -400,6 +402,7 @@ def generate_questions_api():
                 "difficulty": data.get("difficulty"),
                 "total_questions": len(questions),
             }
+            session["matching_result"] = matching_result.get("result", {})
             result["questions"] = questions
         return jsonify(result), 200 if result.get("success") else 400
     except Exception:
@@ -427,9 +430,58 @@ def start_interview():
         "difficulty": config.get("difficulty"),
         "total_questions": len(questions),
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "practice_topic": config.get("practice_topic"),
+        "previous_score": config.get("previous_score"),
     }
     session.pop("completed_interview", None)
     return redirect(url_for("interview"))
+
+
+@app.route("/practice", methods=["GET"])
+@login_required
+def practice():
+    try:
+        analysis = detect_weak_topics(session["user_id"], app)
+    except DatabaseError:
+        flash("Practice recommendations are temporarily unavailable.", "error")
+        analysis = {"weak_topics": [], "has_data": False}
+    return render_template("practice.html", analysis=analysis)
+
+
+@app.route("/practice/<topic>", methods=["POST"])
+@login_required
+def start_practice(topic):
+    try:
+        analysis = detect_weak_topics(session["user_id"], app)
+    except DatabaseError:
+        flash("Practice recommendations are temporarily unavailable.", "error")
+        return redirect(url_for("practice"))
+    selected = next((item for item in analysis["weak_topics"] if item["topic"].casefold() == topic.casefold()), None)
+    if selected is None:
+        return render_template("interview_not_found.html"), 404
+    difficulty = request.form.get("difficulty", "medium").lower()
+    if difficulty not in {"easy", "medium", "hard"}:
+        difficulty = "medium"
+    count = request.form.get("number_of_questions", type=int) or 5
+    if count not in {5, 10, 15}:
+        count = 5
+    result = generate_interview_questions(
+        session.get("resume_analysis", {}).get("analysis", {}) or {"skills": [selected["topic"]]},
+        session.get("job_analysis", {}).get("analysis", {}) or {"job_title": "Targeted practice"},
+        session.get("matching_result", {}) or {"matched_required_skills": [selected["topic"]]},
+        "technical",
+        difficulty,
+        count,
+        selected["topic"],
+        selected.get("missing_concepts", []),
+    )
+    if not result.get("success"):
+        flash(result.get("error", "Unable to generate practice questions."), "error")
+        return redirect(url_for("practice"))
+    questions = [{"id": index + 1, **question} for index, question in enumerate(result["questions"])]
+    session["generated_questions"] = questions
+    session["generated_interview_config"] = {"interview_type": "practice", "difficulty": difficulty, "total_questions": len(questions), "practice_topic": selected["topic"], "previous_score": selected["average_score"]}
+    return redirect(url_for("start_interview"), code=307)
 
 
 @app.route("/interview", methods=["GET"])
@@ -549,6 +601,7 @@ def finish_interview():
         "interview_summary.html",
         answers=completed["answers"],
         total_questions=len(completed["questions"]),
+        performance=calculate_interview_performance(completed["answers"], len(completed["questions"])),
     )
 
 
@@ -575,7 +628,11 @@ def dashboard():
         "best_score": max((item["overall_score"] for item in saved_interviews if item["overall_score"] is not None), default=None),
         "average_score": round(sum(item["overall_score"] for item in saved_interviews if item["overall_score"] is not None) / max(1, sum(item["overall_score"] is not None for item in saved_interviews)), 1),
     }
-    return render_template("dashboard.html", performance=performance, user_stats=stats)
+    try:
+        weakness_analysis = detect_weak_topics(session["user_id"], app)
+    except DatabaseError:
+        weakness_analysis = None
+    return render_template("dashboard.html", performance=performance, user_stats=stats, weakness_analysis=weakness_analysis)
 
 
 @app.route("/history", methods=["GET"])

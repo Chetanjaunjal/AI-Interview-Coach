@@ -240,6 +240,34 @@ def get_user_interviews(user_id, app=None):
         raise DatabaseError("Unable to load interview history.") from error
 
 
+def get_user_interview_records(user_id, app=None):
+    """Return evaluated answer records joined to only one user's interviews."""
+    value = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            rows = connection.execute(
+                """SELECT i.id AS interview_id, i.completed_at, q.id AS question_id,
+                          q.topic, q.category, a.id AS answer_id,
+                          a.relevance_score, a.correctness_score, a.completeness_score,
+                          a.communication_score, a.overall_score, a.evaluation_json
+                   FROM interviews i
+                   JOIN questions q ON q.interview_id = i.id
+                   LEFT JOIN answers a ON a.question_id = q.id
+                   WHERE i.user_id = ?
+                   ORDER BY i.completed_at DESC, i.id DESC, q.question_order""",
+                (value,),
+            )
+            records = []
+            for row in rows:
+                record = dict(row)
+                evaluation = json.loads(record.pop("evaluation_json")) if record.get("evaluation_json") else {}
+                record["missing_concepts"] = evaluation.get("missing_points", []) if isinstance(evaluation, dict) else []
+                records.append(record)
+            return records
+    except (sqlite3.Error, json.JSONDecodeError) as error:
+        raise DatabaseError("Unable to load performance data.") from error
+
+
 def _valid_id(interview_id):
     try:
         value = int(interview_id)

@@ -27,7 +27,7 @@
                             {% for interview in interviews %}
                                 <tr>
                                     <td>{{ interview.completed_at[:10] }}</td>
-                                    <td>{{ interview.interview_type|title }}</td>
+                                    <td>{% if interview.interview_type == 'practice' %}Practice Session{% else %}{{ interview.interview_type|title }} Interview{% endif %}{% if interview.practice_topic %} &middot; {{ interview.practice_topic }}{% endif %}</td>
                                     <td>{{ interview.difficulty|title }}</td>
                                     <td>{{ interview.total_questions }}</td>
                                     <td>{{ interview.overall_score if interview.overall_score is not none else 'N/A' }} / 10</td>

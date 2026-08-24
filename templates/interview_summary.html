@@ -16,6 +16,7 @@
             <p class="eyebrow">Interview Completed!</p>
             <h1>You answered <span>{{ answers|length }} out of {{ total_questions }}</span> questions.</h1>
             <p class="upload-instructions">Here are the answers and evaluations from this interview.</p>
+            {% if session.get('completed_interview', {}).get('practice_topic') %}<p class="dashboard-account">Practice topic: {{ session.get('completed_interview').get('practice_topic') }}{% if session.get('completed_interview').get('previous_score') is not none %} &middot; Previous: {{ session.get('completed_interview').get('previous_score') }} / 10 &middot; Practice: {{ performance.overall_score if performance.overall_score is not none else 'N/A' }} / 10{% if performance.overall_score is not none %} &middot; Change: {{ (performance.overall_score - session.get('completed_interview').get('previous_score'))|round(1) }}{% endif %}{% endif %}</p>{% endif %}
             <a class="primary-button" href="{{ url_for('dashboard') }}">View Performance Dashboard <span aria-hidden="true">&rarr;</span></a>
             {% if session.get('completed_interview', {}).get('database_id') %}<a class="secondary-link" href="{{ url_for('history') }}">View Interview History</a>{% endif %}
             <div class="summary-list">

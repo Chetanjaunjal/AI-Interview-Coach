@@ -209,6 +209,18 @@ The Commit #12 migration adds `users`, adds `interviews.user_id`, and assigns ex
 
 Parameterized SQL prevents input from being interpreted as SQL commands. Generic login errors avoid revealing whether an email is registered. Logout clears the session with POST, and protected routes redirect unauthenticated visitors to `/login`.
 
+## Personalized Weak-Topic Detection (Commit #14)
+
+The weakness detector reads only the authenticated user's completed interview records, joins questions to answers, groups evaluated scores by topic and category, and calculates rubric averages. Scores below `6.0` are weak, scores from `6.0` through `7.9` need practice, and scores of `8.0` or higher are strong. A single low question is reported as a potential weakness because sample size matters.
+
+The detector compares the most recent two interviews with earlier interviews when enough data exists. Differences of at least `0.5` are marked improving or declining; otherwise the result is stable or not enough data. Stored `missing_points` are aggregated into frequently missed concepts, and recommendations are generated with deterministic Python rules rather than another LLM call.
+
+## Practice Mode (Commit #14)
+
+`/practice` presents user-specific weak and average topics. Selecting a topic validates it against the detector output, passes its missed concepts to the existing question generator, and starts the same interview session used by normal interviews. The prompt explicitly focuses questions on the selected topic, so practice is targeted rather than random. Practice answers use the existing evaluator and are saved with `interview_type = 'practice'`, the authenticated `user_id`, and the normal transaction rules.
+
+Python handles aggregation, thresholds, trends, and recommendations because those results should be repeatable and testable. The existing AI is reserved for natural-language work: generating focused questions and evaluating answers.
+
 ## AI Interview Question Generator (Commit #8)
 
 After resume analysis, job analysis, and matching, the generator sends the LLM only the relevant structured context: candidate skills, projects, experience, certifications, education, job requirements, responsibilities, matched skills, and missing skills. It does not resend the full resume or job description, which reduces token usage, API cost, and response time.

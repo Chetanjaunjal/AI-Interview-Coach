@@ -131,6 +131,12 @@ class QuestionGeneratorTests(unittest.TestCase):
         self.assertIn("REST APIs", prompt)
         self.assertNotIn("raw resume text", prompt)
 
+    def test_focused_prompt_includes_topic_and_missed_concepts(self):
+        prompt = build_prompt(RESUME, JOB, MATCH, "technical", "medium", 5, "SQL", ["JOIN", "GROUP BY"])
+        self.assertIn("SQL", prompt)
+        self.assertIn("GROUP BY", prompt)
+        self.assertIn("Do not ask unrelated questions", prompt)
+
     def test_duplicate_questions_are_rejected(self):
         payload = question_payload()
         payload["questions"][1]["question"] = payload["questions"][0]["question"]

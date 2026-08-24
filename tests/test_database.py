@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from database.db import DatabaseError, delete_interview, get_db_connection, get_interview, init_database, save_completed_interview
+from database.db import DatabaseError, create_user, delete_interview, get_db_connection, get_interview, init_database, save_completed_interview
 
 
 class DatabaseTests(unittest.TestCase):
@@ -53,6 +53,12 @@ class DatabaseTests(unittest.TestCase):
         broken_app = SimpleNamespace(config={"DATABASE_PATH": self.temp_dir.name})
         with self.assertRaises(DatabaseError):
             save_completed_interview(self.completed(), {"overall_score": 7.8}, broken_app)
+
+    def test_interview_is_saved_for_the_requested_user(self):
+        user_id = create_user("User", "user@example.com", "hash", self.app)
+        interview_id = save_completed_interview(self.completed(), {"overall_score": 7.8}, user_id, self.app)
+        with get_db_connection(self.app) as connection:
+            self.assertEqual(connection.execute("SELECT user_id FROM interviews WHERE id = ?", (interview_id,)).fetchone()[0], user_id)
 
 
 if __name__ == "__main__":

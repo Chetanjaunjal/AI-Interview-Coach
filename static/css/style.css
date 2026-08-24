@@ -256,6 +256,67 @@ nav a:hover {
     color: var(--muted);
 }
 
+.practice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin-top: 32px;
+}
+
+.practice-card {
+    padding: 26px;
+    background: var(--surface);
+    border-top: 3px solid var(--accent);
+}
+
+.practice-card h2,
+.practice-card h3 {
+    font-size: 1.5rem;
+}
+
+.practice-card .eyebrow {
+    margin-bottom: 12px;
+}
+
+.practice-score {
+    margin: 16px 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.practice-score small {
+    color: var(--muted);
+    font-size: 1rem;
+}
+
+.practice-card form {
+    display: grid;
+    gap: 8px;
+    margin-top: 22px;
+}
+
+.practice-card select {
+    padding: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font: inherit;
+}
+
+.practice-card .primary-button {
+    width: fit-content;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 24px;
+}
+
 .hero {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
