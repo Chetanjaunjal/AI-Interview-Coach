@@ -18,6 +18,8 @@ from ai.resume_tailor import analyze_resume_keywords, calculate_ats_score, tailo
 from analytics.interview_analytics import calculate_interview_performance
 from analytics.weakness_detector import detect_weak_topics
 from analytics.job_preparation import build_job_interview_plan
+from analytics.roadmap import build_daily_plan, build_roadmap
+from ai.roadmap_explainer import explain_roadmap
 from utils.pdf_export import resume_to_pdf
 from flask import Response
 from database.db import (
@@ -832,6 +834,56 @@ def dashboard():
     except DatabaseError:
         weakness_analysis = None
     return render_template("dashboard.html", performance=performance, user_stats=stats, weakness_analysis=weakness_analysis)
+
+
+def _current_roadmap():
+    weakness = detect_weak_topics(session["user_id"], app)
+    saved_jobs = get_user_jobs(session["user_id"], app)
+    active_job = None
+    if saved_jobs:
+        active_job = get_user_job(saved_jobs[0]["id"], session["user_id"], app)
+    return build_roadmap(weakness, saved_jobs, active_job)
+
+
+@app.route("/roadmap", methods=["GET"])
+@login_required
+def roadmap():
+    try:
+        result = _current_roadmap()
+    except DatabaseError:
+        flash("Your learning roadmap is temporarily unavailable.", "error")
+        return redirect(url_for("home"))
+    if not result["has_data"]:
+        return render_template("roadmap.html", roadmap=result, no_data=True)
+    explanation = None
+    analyzer = get_analyzer()
+    if analyzer:
+        explanation = explain_roadmap(result, analyzer.client, analyzer.model)
+    return render_template("roadmap.html", roadmap=result, no_data=False, explanation=explanation)
+
+
+@app.route("/roadmap/topic/<topic>", methods=["GET"])
+@login_required
+def roadmap_topic(topic):
+    try:
+        result = _current_roadmap()
+    except DatabaseError:
+        return render_template("interview_not_found.html"), 404
+    selected = next((item for item in result["topics"] if item["topic"].casefold() == topic.casefold()), None)
+    if selected is None:
+        return render_template("interview_not_found.html"), 404
+    return render_template("topic_detail.html", topic=selected)
+
+
+@app.route("/roadmap/today", methods=["GET"])
+@login_required
+def roadmap_today():
+    try:
+        result = _current_roadmap()
+    except DatabaseError:
+        return render_template("interview_not_found.html"), 404
+    minutes = request.args.get("minutes", type=int) or 30
+    return render_template("daily_plan.html", plan=build_daily_plan(result, minutes))
 
 
 @app.route("/history", methods=["GET"])

@@ -13,7 +13,7 @@
             <span>{{ current_user.name }}</span>
             <a href="{{ url_for('finish_interview') }}">Answer Summary</a>
             <a href="{{ url_for('history') }}">History</a>
-            <a href="{{ url_for('practice') }}">Practice</a><a href="{{ url_for('jobs') }}">Jobs</a>
+            <a href="{{ url_for('practice') }}">Practice</a><a href="{{ url_for('roadmap') }}">Roadmap</a><a href="{{ url_for('jobs') }}">Jobs</a>
             {% if history_interview %}<a href="{{ url_for('interview_detail', interview_id=history_interview.id) }}">Interview Details</a>{% endif %}
             <a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a>
             <form action="{{ url_for('logout') }}" method="post"><button class="text-button" type="submit">Log Out</button></form>
@@ -36,6 +36,7 @@
                 </div>
             </div>
             {% if user_stats %}<p class="dashboard-account">{{ current_user.name }} &middot; {{ current_user.email }} &middot; {{ user_stats.total_interviews }} completed interviews{% if user_stats.average_score is not none %} &middot; Average {{ user_stats.average_score }} / 10{% endif %}</p>{% endif %}
+            <section class="dashboard-section"><div class="section-heading"><div><p class="eyebrow">Personalized Learning</p><h2>Your Roadmap</h2></div><a class="secondary-link" href="{{ url_for('roadmap') }}">View Roadmap</a></div><p>Turn your interview results into the next focused study topic.</p></section>
             {% if weakness_analysis %}<section class="dashboard-section weakness-section"><div class="section-heading"><div><p class="eyebrow">Personalized Practice</p><h2>Your Weak Areas</h2></div><a class="secondary-link" href="{{ url_for('practice') }}">Practice a topic</a></div><div class="practice-grid">{% for item in weakness_analysis.weak_topics[:4] %}<article class="practice-card"><p class="eyebrow">{{ item.status|replace('_', ' ')|title }}</p><h3>{{ item.topic }}</h3><p class="practice-score">{{ item.average_score }} <small>/ 10</small></p>{% if item.trend != 'not_enough_data' %}<p>{{ item.trend|title }}{% if item.previous_average is not none and item.recent_average is not none %}: {{ item.previous_average }} to {{ item.recent_average }}{% endif %}</p>{% endif %}</article>{% endfor %}</div>{% if weakness_analysis.strong_topics %}<p class="eyebrow">Your Strong Areas</p><p>{% for item in weakness_analysis.strong_topics %}{{ item.topic }} {{ item.average_score }}/10{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}</section>{% endif %}
             {% if weakness_analysis and weakness_analysis.weak_categories %}<p class="dashboard-account">Categories to practice: {% for item in weakness_analysis.weak_categories %}{{ item.topic }} {{ item.average_score }}/10{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
 

@@ -291,7 +291,7 @@ def get_user_interview_records(user_id, app=None):
     try:
         with get_db_connection(app) as connection:
             rows = connection.execute(
-                """SELECT i.id AS interview_id, i.completed_at, q.id AS question_id,
+                """SELECT i.id AS interview_id, i.completed_at, i.interview_type, i.job_id, q.id AS question_id,
                           q.topic, q.category, a.id AS answer_id,
                           a.relevance_score, a.correctness_score, a.completeness_score,
                           a.communication_score, a.overall_score, a.evaluation_json

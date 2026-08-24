@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Learning Roadmap | AI Interview Coach</title><link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"></head>
+<body>
+<header class="site-header"><a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a><nav><a href="{{ url_for('dashboard') }}">Dashboard</a><a href="{{ url_for('practice') }}">Practice</a><a href="{{ url_for('profile') }}">{{ current_user.name }}</a></nav></header>
+<main><section class="history-page">
+<p class="eyebrow">Data-informed learning</p><h1>Your Interview <span>Roadmap</span></h1>
+{% if no_data %}<div class="empty-state"><h2>Complete your first interview</h2><p>Complete your first interview to generate a personalized roadmap.</p><a class="primary-button" href="{{ url_for('home') }}#interview-generator">Start an Interview <span aria-hidden="true">&rarr;</span></a></div>
+{% else %}
+{% if explanation %}<p class="dashboard-account">{{ explanation }}</p>{% endif %}
+<p class="upload-instructions">{{ roadmap.job.title if roadmap.job else 'Roadmap based on your interview performance.' }}</p>
+{% if roadmap.job_readiness is not none %}<div class="ats-panel"><strong>Estimated Interview Readiness: {{ roadmap.job_readiness }}%</strong><small>This is an estimate, not a prediction of hiring results.</small></div>{% endif %}
+<div class="practice-grid">{% for item in roadmap.topics %}<article class="practice-card"><p class="eyebrow">Priority {{ item.priority }} &middot; {{ item.status }}</p><h2>{{ item.topic }}</h2><p class="practice-score">{{ item.mastery_score }} <small>/ 100 mastery</small></p><p>Priority score: {{ item.priority_score }} &middot; {{ item.trend|replace('_', ' ')|title }}</p><p>Missed concepts: {{ item.missing_concepts[:3]|join(', ') or 'None recorded' }}</p><a class="primary-button" href="{{ url_for('roadmap_topic', topic=item.topic) }}">View Plan <span aria-hidden="true">&rarr;</span></a></article>{% endfor %}</div>
+<section class="dashboard-section"><p class="eyebrow">Roadmap Phases</p>{% for phase in roadmap.phases %}{% if phase.topics %}<h2>{{ phase.name }}</h2><p>{{ phase.topics|join(', ') }} &middot; {{ phase.goal }}</p>{% endif %}{% endfor %}</section>
+<p><a class="secondary-link" href="{{ url_for('roadmap_today') }}">Build today's study plan</a></p>
+{% endif %}
+</section></main>
+</body></html>

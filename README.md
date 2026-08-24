@@ -221,6 +221,19 @@ The detector compares the most recent two interviews with earlier interviews whe
 
 Python handles aggregation, thresholds, trends, and recommendations because those results should be repeatable and testable. The existing AI is reserved for natural-language work: generating focused questions and evaluating answers.
 
+## Personalized Learning Roadmap (Commit #18)
+
+The roadmap answers "What should I study next?" by combining persisted interview performance, practice performance, weak topics, missed concepts, and the selected user's saved job requirements. `/roadmap` calculates topic mastery, learning priority, recommended difficulty, roadmap phases, and an estimated interview-readiness score. `/roadmap/today` creates a simple 30-, 60-, or 90-minute recommendation without building a calendar or notification system.
+
+Mastery is deterministic: `50%` overall performance, `20%` practice performance, `20%` recent performance, and `10%` consistency. Priority combines weakness, job relevance, mistake frequency, and recent performance. Scores are recalculated from current database data after every completed interview, so a topic can move down the roadmap as performance improves. No roadmap database table is required because these values are derived analytics rather than independent user edits.
+
+```text
+Interview History -> Performance Analytics -> Weak Topics -> Missed Concepts
+  -> Job Requirements -> Priority Engine -> Roadmap -> Practice -> Updated Analytics
+```
+
+Python calculates scores, trends, priorities, readiness, and study duration. The existing practice engine handles question generation and evaluation. The roadmap does not call external course APIs or invent learning resources. With no target job, it uses a neutral job-relevance baseline and clearly presents a general interview roadmap.
+
 ## AI Resume Tailoring (Commit #16)
 
 Resume tailoring combines a user's analyzed resume, a saved target job, resume-job matching, and keyword analysis before asking the existing LLM to improve wording and ordering. The original resume is stored separately and is never overwritten. Tailored versions are stored with the user, source resume, target job, generated content, and estimated ATS score.
