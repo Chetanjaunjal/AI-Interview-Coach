@@ -29,6 +29,9 @@ AI Interview Coach is a Flask web application for practicing interview skills wi
 - **Interview progress tracking and summaries** (Commit #9)
 - **AI answer evaluation and structured feedback** (Commit #10)
 - **Rubric-based answer scoring** (Commit #10)
+- **Interview performance dashboard** (Commit #11)
+- **Topic and category analytics** (Commit #11)
+- **Personalized improvement recommendations** (Commit #11)
 
 ## Planned Features
 
@@ -122,7 +125,8 @@ Then open http://127.0.0.1:5000/ in your browser.
 7. **Generate Questions**: Choose an interview type, difficulty, and 5, 10, or 15 questions, then generate a personalized question set
 8. **Start an Interview**: Start the generated set, answer one question at a time, and submit each answer
 9. **Review Evaluation**: After submitting an answer, review its rubric scores and constructive feedback before moving to the next question.
-10. **Review the Summary**: After the final answer, review every submitted answer and its available evaluation. Later commits can add aggregate scoring.
+10. **Review the Summary**: After the final answer, review every submitted answer and its available evaluation.
+11. **Open the Dashboard**: View deterministic overall, rubric, category, topic, strength, weakness, and recommendation summaries.
 
 ## Interactive Interview Sessions (Commit #9)
 
@@ -146,6 +150,12 @@ overall = relevance × 0.25
 ```
 
 The final score is rounded to one decimal place using deterministic decimal half-up rounding. This makes the score explainable and prevents the LLM from arbitrarily choosing an overall result. LLM evaluation remains an approximation, not an objective measurement of a person’s ability. If the API fails or returns invalid JSON, the saved answer is preserved and the user can continue without evaluation.
+
+## Interview Performance Dashboard (Commit #11)
+
+The dashboard aggregates the individual evaluation records already stored in the completed interview session. Python calculates the overall average, rubric averages, highest and lowest scores, category averages, topic scores, strong areas, weak areas, and deterministic recommendations. It does not call the LLM again for statistics.
+
+Strong areas use a configurable default threshold of `8.0`; weak areas use `6.0`. Topic classifications require at least two evaluated questions by default, so one question is displayed but not treated as proof that a topic is strong or weak. Invalid or missing evaluations remain counted as answered but are excluded from score averages. The dashboard uses temporary Flask session data, so it can disappear when the session expires or a new interview replaces the completed snapshot. Persistent history belongs in a future database-backed feature.
 
 ## AI Interview Question Generator (Commit #8)
 

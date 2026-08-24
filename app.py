@@ -11,6 +11,7 @@ from ai.job_analyzer import get_job_analyzer
 from ai.matcher import match_resume_to_job
 from ai.question_generator import generate_interview_questions
 from ai.answer_evaluator import evaluate_answer
+from analytics.interview_analytics import calculate_interview_performance
 
 # Load environment variables from .env file
 load_dotenv()
@@ -365,6 +366,7 @@ def submit_answer():
         "answer": answer.strip(),
         "category": current_question["category"],
         "difficulty": current_question["difficulty"],
+        "topic": current_question.get("topic", "Unspecified topic"),
     })
     session["interview"] = interview_state
     evaluation_result = evaluate_answer(
@@ -419,6 +421,20 @@ def finish_interview():
         answers=completed["answers"],
         total_questions=len(completed["questions"]),
     )
+
+
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    """Render deterministic performance analytics for the completed interview."""
+    completed = session.get("completed_interview")
+    if not _valid_interview_state(completed) or completed["current_index"] < len(completed["questions"]):
+        flash("No completed interview is available. Complete an interview to see your performance dashboard.", "error")
+        return redirect(url_for("home"))
+    performance = calculate_interview_performance(
+        completed.get("answers", []),
+        total_questions=len(completed["questions"]),
+    )
+    return render_template("dashboard.html", performance=performance)
 
 
 def _valid_interview_state(interview_state):

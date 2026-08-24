@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Performance | AI Interview Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
+        <nav aria-label="Main navigation">
+            <a href="{{ url_for('finish_interview') }}">Answer Summary</a>
+            <a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a>
+        </nav>
+    </header>
+    <main>
+        <section class="dashboard-page">
+            <p class="eyebrow">Interview Performance</p>
+            <h1>Your practice, <span>mapped.</span></h1>
+            <div class="dashboard-hero">
+                <div class="dashboard-score">
+                    <p class="score-label">Overall Score</p>
+                    <strong>{{ performance.overall_score if performance.overall_score is not none else 'N/A' }}<small>/ 10</small></strong>
+                </div>
+                <div class="dashboard-stats">
+                    <div><strong>{{ performance.total_questions }}</strong><span>Questions</span></div>
+                    <div><strong>{{ performance.answered_questions }}</strong><span>Answered</span></div>
+                    <div><strong>{{ performance.highest_score if performance.highest_score is not none else 'N/A' }}</strong><span>Highest</span></div>
+                    <div><strong>{{ performance.lowest_score if performance.lowest_score is not none else 'N/A' }}</strong><span>Lowest</span></div>
+                </div>
+            </div>
+
+            {% if performance.evaluated_questions == 0 %}
+                <p class="analysis-status error">No evaluated answers are available for this interview yet.</p>
+            {% else %}
+                <section class="dashboard-section">
+                    <p class="eyebrow">Score Breakdown</p>
+                    <div class="metric-list">
+                        {% for label, key in [('Relevance', 'relevance'), ('Correctness / Content Quality', 'correctness'), ('Completeness', 'completeness'), ('Communication', 'communication')] %}
+                            <div class="metric-row">
+                                <div><strong>{{ label }}</strong><span>{{ performance.averages[key] if performance.averages[key] is not none else 'N/A' }} / 10</span></div>
+                                {% if performance.averages[key] is not none %}<div class="metric-track"><div class="metric-value" style="width: {{ performance.averages[key] * 10 }}%"></div></div>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                {% if performance.category_scores %}
+                    <section class="dashboard-section">
+                        <p class="eyebrow">Category Performance</p>
+                        <div class="metric-list">
+                            {% for category, score in performance.category_scores.items() %}
+                                <div class="metric-row"><div><strong>{{ category }}</strong><span>{{ score }} / 10</span></div><div class="metric-track"><div class="metric-value" style="width: {{ score * 10 }}%"></div></div></div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endif %}
+
+                {% if performance.topic_scores %}
+                    <section class="dashboard-section">
+                        <p class="eyebrow">Topic Performance</p>
+                        <div class="metric-list">
+                            {% for topic, score in performance.topic_scores.items() %}
+                                <div class="metric-row"><div><strong>{{ topic }}</strong><span>{{ score }} / 10{% if performance.topic_question_counts[topic] < performance.thresholds.minimum_topic_questions %} <small>(single question)</small>{% endif %}</span></div><div class="metric-track"><div class="metric-value" style="width: {{ score * 10 }}%"></div></div></div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endif %}
+
+                <div class="dashboard-columns">
+                    <section class="dashboard-section compact-section">
+                        <p class="eyebrow">Strong Areas</p>
+                        {% if performance.strong_areas %}<ul class="dashboard-list">{% for area in performance.strong_areas %}<li>{{ area }}</li>{% endfor %}</ul>{% else %}<p>No strong area met the current threshold.</p>{% endif %}
+                    </section>
+                    <section class="dashboard-section compact-section">
+                        <p class="eyebrow">Needs Improvement</p>
+                        {% if performance.weak_areas %}<ul class="dashboard-list weak-list">{% for area in performance.weak_areas %}<li>{{ area }}</li>{% endfor %}</ul>{% else %}<p>No weak area met the current threshold.</p>{% endif %}
+                    </section>
+                </div>
+
+                <section class="dashboard-section recommendations-section">
+                    <p class="eyebrow">Recommendations</p>
+                    <ol class="recommendations-list">{% for recommendation in performance.recommendations %}<li>{{ recommendation }}</li>{% endfor %}</ol>
+                </section>
+            {% endif %}
+        </section>
+    </main>
+    <footer><p>&copy; <span id="current-year"></span> AI Interview Coach</p></footer>
+    <script>document.querySelector("#current-year").textContent = new Date().getFullYear();</script>
+</body>
+</html>

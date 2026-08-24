@@ -15,7 +15,8 @@
         <section class="interview-page summary-page">
             <p class="eyebrow">Interview Completed!</p>
             <h1>You answered <span>{{ answers|length }} out of {{ total_questions }}</span> questions.</h1>
-            <p class="upload-instructions">Here are the answers you submitted. No scores or feedback have been generated.</p>
+            <p class="upload-instructions">Here are the answers and evaluations from this interview.</p>
+            <a class="primary-button" href="{{ url_for('dashboard') }}">View Performance Dashboard <span aria-hidden="true">&rarr;</span></a>
             <div class="summary-list">
                 {% for item in answers %}
                     <article class="summary-card">
