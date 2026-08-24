@@ -8,7 +8,7 @@ ALLOWED_INTERVIEW_TYPES = {"technical", "hr", "behavioral", "mixed"}
 ALLOWED_DIFFICULTIES = {"easy", "medium", "hard"}
 ALLOWED_QUESTION_COUNTS = {5, 10, 15}
 REQUIRED_QUESTION_FIELDS = {"question", "category", "difficulty", "topic", "reason"}
-ALLOWED_CATEGORIES = {"technical", "hr", "behavioral"}
+ALLOWED_CATEGORIES = {"technical", "project", "hr", "behavioral"}
 
 
 class QuestionGenerator:
@@ -28,6 +28,7 @@ class QuestionGenerator:
         number_of_questions: int,
         focus_topic: Optional[str] = None,
         weak_concepts: Optional[list[str]] = None,
+        weak_topics: Optional[list[dict]] = None,
     ) -> Dict[str, Any]:
         validation_error = validate_generation_inputs(
             resume_data,
@@ -50,6 +51,7 @@ class QuestionGenerator:
             number_of_questions,
             focus_topic,
             weak_concepts,
+            weak_topics,
         )
 
         try:
@@ -125,6 +127,7 @@ def build_prompt(
     number_of_questions: int,
     focus_topic: Optional[str] = None,
     weak_concepts: Optional[list[str]] = None,
+    weak_topics: Optional[list[dict]] = None,
 ) -> str:
     """Build a compact prompt from structured analysis rather than raw documents."""
     context = {
@@ -157,6 +160,8 @@ def build_prompt(
     focus = ""
     if focus_topic:
         focus = f" Focus every question on the topic {focus_topic!r}. Target these previously missed concepts: {json.dumps(weak_concepts or [], ensure_ascii=True)}. Do not ask unrelated questions."
+    elif weak_topics:
+        focus = f" Prioritize these previous weak areas: {json.dumps(weak_topics, ensure_ascii=True)}."
     return (
         f"Generate exactly {number_of_questions} unique questions for a {interview_type} "
         f"interview at {difficulty} difficulty. {difficulty_rules[difficulty]}\n"
@@ -164,7 +169,7 @@ def build_prompt(
         "as knowledge checks. For HR questions, cover motivation, strengths, goals, teamwork, "
         "and conflict. For behavioral questions, use scenarios. For mixed, balance categories.\n"
         "Each item must have exactly these string fields: question, category, difficulty, topic, reason. "
-        "Use category values Technical, HR, or Behavioral and set difficulty to the requested value. "
+        "Use category values Technical, Project, HR, or Behavioral and set difficulty to the requested value. "
         "A reason must identify the supplied context behind the question. Return only JSON.\n\n"
         f"CONTEXT:\n{json.dumps(context, ensure_ascii=True)}{focus}"
     )
@@ -233,6 +238,7 @@ def generate_interview_questions(
     number_of_questions: int,
     focus_topic: Optional[str] = None,
     weak_concepts: Optional[list[str]] = None,
+    weak_topics: Optional[list[dict]] = None,
 ) -> Dict[str, Any]:
     """Public function used by Flask and tests."""
     validation_error = validate_generation_inputs(
@@ -244,5 +250,5 @@ def generate_interview_questions(
     if not generator:
         return {"success": False, "error": "AI service is not configured. Please set OPENAI_API_KEY."}
     return generator.generate(
-        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions, focus_topic, weak_concepts
+        resume_data, job_data, match_data, interview_type, difficulty, number_of_questions, focus_topic, weak_concepts, weak_topics
     )

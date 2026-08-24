@@ -9,7 +9,7 @@
 <body>
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}">AI Interview Coach</a>
-        <nav aria-label="Main navigation"><a href="{{ url_for('dashboard') }}">Dashboard</a><a href="{{ url_for('profile') }}">{{ current_user.name }}</a><form action="{{ url_for('logout') }}" method="post"><button class="text-button" type="submit">Log Out</button></form><a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a></nav>
+        <nav aria-label="Main navigation"><a href="{{ url_for('dashboard') }}">Dashboard</a><a href="{{ url_for('jobs') }}">Jobs</a><a href="{{ url_for('profile') }}">{{ current_user.name }}</a><form action="{{ url_for('logout') }}" method="post"><button class="text-button" type="submit">Log Out</button></form><a class="nav-cta" href="{{ url_for('home') }}#interview-generator">New Interview</a></nav>
     </header>
     <main>
         <section class="history-page">
@@ -22,12 +22,13 @@
             {% if interviews %}
                 <div class="history-table-wrap">
                     <table class="history-table">
-                        <thead><tr><th>Date</th><th>Type</th><th>Difficulty</th><th>Questions</th><th>Score</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                        <thead><tr><th>Date</th><th>Type</th><th>Role</th><th>Difficulty</th><th>Questions</th><th>Score</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
                         <tbody>
                             {% for interview in interviews %}
                                 <tr>
                                     <td>{{ interview.completed_at[:10] }}</td>
                                     <td>{% if interview.interview_type == 'practice' %}Practice Session{% else %}{{ interview.interview_type|title }} Interview{% endif %}{% if interview.practice_topic %} &middot; {{ interview.practice_topic }}{% endif %}</td>
+                                    <td>{{ interview.job_title or 'General preparation' }}</td>
                                     <td>{{ interview.difficulty|title }}</td>
                                     <td>{{ interview.total_questions }}</td>
                                     <td>{{ interview.overall_score if interview.overall_score is not none else 'N/A' }} / 10</td>

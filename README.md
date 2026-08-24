@@ -221,6 +221,14 @@ The detector compares the most recent two interviews with earlier interviews whe
 
 Python handles aggregation, thresholds, trends, and recommendations because those results should be repeatable and testable. The existing AI is reserved for natural-language work: generating focused questions and evaluating answers.
 
+## Job-Specific Interview Preparation (Commit #15)
+
+Analyzed jobs are saved per user in SQLite. Job-specific preparation combines the selected job's requirements and responsibilities, the user's resume analysis, deterministic resume-job matching, previous performance, weak topics, missing concepts, and selected difficulty. Saved jobs are available through `/jobs`; `/job-prep` shows a plan before questions are generated.
+
+For example, a candidate with Java and SQL applying for a Backend Developer role missing Spring Boot may receive Java questions, SQL JOIN questions informed by weak performance, a Spring Boot knowledge-check that does not assume experience, REST API questions, and a question about a project actually present on the resume. Questions include category, topic, difficulty, and reason, and the existing validator rejects malformed or duplicate output.
+
+The `jobs` table belongs to `users`, while `interviews.job_id` links completed preparation to its target role. Job deletion does not delete interview history; the nullable relationship becomes `NULL`. Every job and interview lookup is filtered by the authenticated user. The existing interview session, evaluator, analytics, and SQLite transaction are reused. Python performs matching, planning, prioritization, and validation; the existing LLM generates natural-language questions and evaluates answers.
+
 ## AI Interview Question Generator (Commit #8)
 
 After resume analysis, job analysis, and matching, the generator sends the LLM only the relevant structured context: candidate skills, projects, experience, certifications, education, job requirements, responsibilities, matched skills, and missing skills. It does not resend the full resume or job description, which reduces token usage, API cost, and response time.

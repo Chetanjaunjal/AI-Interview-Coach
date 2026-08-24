@@ -16,16 +16,21 @@ from ai.question_generator import generate_interview_questions
 from ai.answer_evaluator import evaluate_answer
 from analytics.interview_analytics import calculate_interview_performance
 from analytics.weakness_detector import detect_weak_topics
+from analytics.job_preparation import build_job_interview_plan
 from database.db import (
     DatabaseError,
     create_user,
+    create_job,
     delete_user_interview,
     get_user_by_email,
     get_user_by_id,
     get_user_interview,
     get_user_interviews,
+    get_user_job,
+    get_user_jobs,
     init_database,
     save_completed_interview,
+    update_job_matching,
 )
 
 # Load environment variables from .env file
@@ -285,6 +290,11 @@ def analyze_job_api():
         if result.get("success"):
             # Store job analysis in session for matching
             session["job_analysis"] = result
+            try:
+                job_id = create_job(session["user_id"], job_title, company, job_description, result.get("analysis", result), app)
+                session["job_id"] = job_id
+            except (DatabaseError, ValueError):
+                return jsonify({"success": False, "error": "The job was analyzed but could not be saved."}), 500
             session.modified = True
             return jsonify(result), 200
         else:
@@ -343,6 +353,8 @@ def match_resume_api():
 
         if matching_result.get("success"):
             session["matching_result"] = matching_result.get("result", {})
+            if session.get("job_id"):
+                update_job_matching(session["job_id"], session["user_id"], matching_result.get("result", {}), app)
             return jsonify({
                 "success": True,
                 "result": matching_result.get("result")
@@ -401,6 +413,8 @@ def generate_questions_api():
                 "interview_type": data.get("interview_type"),
                 "difficulty": data.get("difficulty"),
                 "total_questions": len(questions),
+                "job_id": session.get("job_id"),
+                "job_title": session.get("job_analysis", {}).get("analysis", {}).get("job_title"),
             }
             session["matching_result"] = matching_result.get("result", {})
             result["questions"] = questions
@@ -432,6 +446,8 @@ def start_interview():
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "practice_topic": config.get("practice_topic"),
         "previous_score": config.get("previous_score"),
+        "job_id": config.get("job_id"),
+        "job_title": config.get("job_title"),
     }
     session.pop("completed_interview", None)
     return redirect(url_for("interview"))
@@ -481,6 +497,83 @@ def start_practice(topic):
     questions = [{"id": index + 1, **question} for index, question in enumerate(result["questions"])]
     session["generated_questions"] = questions
     session["generated_interview_config"] = {"interview_type": "practice", "difficulty": difficulty, "total_questions": len(questions), "practice_topic": selected["topic"], "previous_score": selected["average_score"]}
+    return redirect(url_for("start_interview"), code=307)
+
+
+@app.route("/jobs", methods=["GET"])
+@login_required
+def jobs():
+    try:
+        saved_jobs = get_user_jobs(session["user_id"], app)
+    except DatabaseError:
+        flash("Your saved jobs are temporarily unavailable.", "error")
+        saved_jobs = []
+    return render_template("jobs.html", jobs=saved_jobs)
+
+
+@app.route("/jobs/<job_id>", methods=["GET"])
+@login_required
+def job_detail(job_id):
+    try:
+        job = get_user_job(job_id, session["user_id"], app)
+    except (DatabaseError, ValueError):
+        job = None
+    if job is None:
+        return render_template("interview_not_found.html"), 404
+    return render_template("job_detail.html", job=job)
+
+
+@app.route("/job-prep", methods=["GET", "POST"])
+@login_required
+def job_prep():
+    try:
+        saved_jobs = get_user_jobs(session["user_id"], app)
+    except DatabaseError:
+        flash("Your saved jobs are temporarily unavailable.", "error")
+        saved_jobs = []
+    if request.method == "GET":
+        return render_template("job_prep.html", jobs=saved_jobs)
+    job_id = request.form.get("job_id", "")
+    try:
+        job = get_user_job(job_id, session["user_id"], app)
+    except (DatabaseError, ValueError):
+        job = None
+    if job is None:
+        flash("Please choose one of your saved jobs.", "error")
+        return redirect(url_for("job_prep"))
+    difficulty = request.form.get("difficulty", "medium").lower()
+    count = request.form.get("number_of_questions", type=int) or 10
+    if difficulty not in {"easy", "medium", "hard"}:
+        difficulty = "medium"
+    if count not in {5, 10, 15}:
+        count = 10
+    resume = session.get("resume_analysis")
+    resume_data = resume.get("analysis", {}) if isinstance(resume, dict) else {}
+    job_data = job["analyzed_data"]
+    matching = match_resume_to_job(resume, {"success": True, "analysis": job_data}) if resume else {"success": False, "result": {}}
+    matching_data = matching.get("result", {}) if matching.get("success") else {"missing_required_skills": job_data.get("required_skills", []), "missing_preferred_skills": job_data.get("preferred_skills", [])}
+    try:
+        weakness = detect_weak_topics(session["user_id"], app)
+    except DatabaseError:
+        flash("Previous performance is temporarily unavailable. We can still prepare from the job and resume.", "error")
+        weakness = {"weak_topics": [], "has_data": False}
+    plan = build_job_interview_plan(job_data, matching_data, weakness, difficulty, count)
+    result = generate_interview_questions(resume_data or {"skills": []}, job_data, matching_data or {"job": job["title"]}, "mixed", difficulty, count, weak_topics=weakness.get("weak_topics", []))
+    if not result.get("success"):
+        flash(result.get("error", "Unable to generate this interview."), "error")
+        return redirect(url_for("job_prep"))
+    questions = [{"id": index + 1, **question} for index, question in enumerate(result["questions"])]
+    session["generated_questions"] = questions
+    session["generated_interview_config"] = {"interview_type": "job-specific", "difficulty": difficulty, "total_questions": count, "job_id": job["id"], "job_title": job["title"]}
+    return render_template("job_plan.html", plan=plan, job=job)
+
+
+@app.route("/job-prep/start", methods=["POST"])
+@login_required
+def start_job_interview():
+    if not session.get("generated_questions") or session.get("generated_interview_config", {}).get("interview_type") != "job-specific":
+        flash("Generate a job-specific interview plan first.", "error")
+        return redirect(url_for("job_prep"))
     return redirect(url_for("start_interview"), code=307)
 
 
@@ -578,7 +671,7 @@ def next_question():
             total_questions=len(interview_state["questions"]),
         )
         try:
-            interview_id = save_completed_interview(interview_state, performance, session["user_id"], app)
+            interview_id = save_completed_interview(interview_state, performance, session["user_id"], app, interview_state.get("job_id"))
             interview_state["database_id"] = interview_id
             session["completed_interview"] = interview_state
         except (DatabaseError, ValueError):

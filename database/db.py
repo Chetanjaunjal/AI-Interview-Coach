@@ -43,7 +43,9 @@ def init_database(app=None):
                     started_at TEXT NOT NULL,
                     completed_at TEXT NOT NULL,
                     user_id INTEGER,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    job_id INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS questions (
@@ -88,6 +90,8 @@ def init_database(app=None):
             columns = {row[1] for row in connection.execute("PRAGMA table_info(interviews)")}
             if "user_id" not in columns:
                 connection.execute("ALTER TABLE interviews ADD COLUMN user_id INTEGER")
+            if "job_id" not in columns:
+                connection.execute("ALTER TABLE interviews ADD COLUMN job_id INTEGER")
             legacy = connection.execute("SELECT id FROM users WHERE email = ?", ("legacy@local.invalid",)).fetchone()
             if legacy is None:
                 cursor = connection.execute(
@@ -99,6 +103,20 @@ def init_database(app=None):
                 legacy_id = legacy[0]
             connection.execute("UPDATE interviews SET user_id = ? WHERE user_id IS NULL", (legacy_id,))
             connection.execute("CREATE INDEX IF NOT EXISTS idx_interviews_user_id ON interviews(user_id)")
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_interviews_job_id ON interviews(job_id)")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    company_name TEXT,
+                    description TEXT NOT NULL,
+                    analyzed_data TEXT NOT NULL,
+                    matching_data TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )"""
+            )
     except sqlite3.Error as error:
         raise DatabaseError("Unable to initialize the interview database.") from error
 
@@ -166,7 +184,7 @@ def get_user_by_id(user_id, app=None):
         raise DatabaseError("Unable to load the account.") from error
 
 
-def save_completed_interview(completed, performance, user_id=None, app=None):
+def save_completed_interview(completed, performance, user_id=None, app=None, job_id=None):
     if not isinstance(completed, dict) or not isinstance(performance, dict):
         raise ValueError("Invalid completed interview data")
     questions = completed.get("questions")
@@ -180,6 +198,8 @@ def save_completed_interview(completed, performance, user_id=None, app=None):
         legacy_user = get_user_by_email("legacy@local.invalid", app)
         user_id = legacy_user["id"] if legacy_user else None
     user_id = _valid_id(user_id)
+    if job_id is not None:
+        job_id = _valid_id(job_id)
     started_at = completed.get("started_at") or _now()
     completed_at = _now()
     overall_score = _score(performance.get("overall_score"), "overall_score")
@@ -188,8 +208,8 @@ def save_completed_interview(completed, performance, user_id=None, app=None):
     try:
         with get_db_connection(app) as connection:
             cursor = connection.execute(
-                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at, user_id),
+                "INSERT INTO interviews (interview_type, difficulty, total_questions, overall_score, started_at, completed_at, user_id, job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (interview_type, difficulty, len(questions), overall_score, started_at, completed_at, user_id, job_id),
             )
             interview_id = cursor.lastrowid
             for order, question in enumerate(questions, start=1):
@@ -235,7 +255,7 @@ def get_user_interviews(user_id, app=None):
     value = _valid_id(user_id)
     try:
         with get_db_connection(app) as connection:
-            return [dict(row) for row in connection.execute("SELECT * FROM interviews WHERE user_id = ? ORDER BY completed_at DESC, id DESC", (value,))]
+            return [dict(row) for row in connection.execute("SELECT i.*, j.title AS job_title FROM interviews i LEFT JOIN jobs j ON j.id = i.job_id WHERE i.user_id = ? ORDER BY i.completed_at DESC, i.id DESC", (value,))]
     except sqlite3.Error as error:
         raise DatabaseError("Unable to load interview history.") from error
 
@@ -278,12 +298,66 @@ def _valid_id(interview_id):
     return value
 
 
+def create_job(user_id, title, company_name, description, analyzed_data, app=None):
+    user_id = _valid_id(user_id)
+    title = _require_text(title, "job title")
+    description = _require_text(description, "job description")
+    if not isinstance(analyzed_data, dict):
+        raise ValueError("Invalid job analysis")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute(
+                "INSERT INTO jobs (user_id, title, company_name, description, analyzed_data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, title, str(company_name or "").strip() or None, description, json.dumps(analyzed_data), _now()),
+            )
+            return cursor.lastrowid
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save the job.") from error
+
+
+def get_user_jobs(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return [dict(row) for row in connection.execute("SELECT j.*, COUNT(i.id) AS interview_count FROM jobs j LEFT JOIN interviews i ON i.job_id = j.id WHERE j.user_id = ? GROUP BY j.id ORDER BY j.created_at DESC, j.id DESC", (user_id,))]
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load jobs.") from error
+
+
+def get_user_job(job_id, user_id, app=None):
+    job_id = _valid_id(job_id)
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT * FROM jobs WHERE id = ? AND user_id = ?", (job_id, user_id)).fetchone()
+            if not row:
+                return None
+            job = dict(row)
+            job["analyzed_data"] = json.loads(job["analyzed_data"])
+            job["matching_data"] = json.loads(job["matching_data"]) if job.get("matching_data") else {}
+            return job
+    except (sqlite3.Error, json.JSONDecodeError) as error:
+        raise DatabaseError("Unable to load the job.") from error
+
+
+def update_job_matching(job_id, user_id, matching_data, app=None):
+    job_id = _valid_id(job_id)
+    user_id = _valid_id(user_id)
+    if not isinstance(matching_data, dict):
+        raise ValueError("Invalid matching data")
+    try:
+        with get_db_connection(app) as connection:
+            connection.execute("UPDATE jobs SET matching_data = ? WHERE id = ? AND user_id = ?", (json.dumps(matching_data), job_id, user_id))
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save matching data.") from error
+
+
 def get_user_interview(interview_id, user_id, app=None):
     value = _valid_id(interview_id)
     owner_id = _valid_id(user_id)
     try:
         with get_db_connection(app) as connection:
-            row = connection.execute("SELECT * FROM interviews WHERE id = ? AND user_id = ?", (value, owner_id)).fetchone()
+            row = connection.execute("SELECT i.*, j.title AS job_title FROM interviews i LEFT JOIN jobs j ON j.id = i.job_id WHERE i.id = ? AND i.user_id = ?", (value, owner_id)).fetchone()
             if row is None:
                 return None
             interview = dict(row)
