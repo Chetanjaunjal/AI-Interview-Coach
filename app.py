@@ -1,5 +1,7 @@
 import os
 import json
+import logging
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -19,9 +21,11 @@ from analytics.interview_analytics import calculate_interview_performance
 from analytics.weakness_detector import detect_weak_topics
 from analytics.job_preparation import build_job_interview_plan
 from analytics.roadmap import build_daily_plan, build_roadmap
+from analytics.readiness import calculate_readiness
 from ai.roadmap_explainer import explain_roadmap
 from utils.pdf_export import resume_to_pdf
 from flask import Response
+from config import Config
 from database.db import (
     DatabaseError,
     create_user,
@@ -31,6 +35,7 @@ from database.db import (
     delete_user_interview,
     get_user_by_email,
     get_user_by_id,
+    get_user_cover_letter_count,
     get_user_interview,
     get_user_interviews,
     get_user_job,
@@ -43,18 +48,34 @@ from database.db import (
     save_completed_interview,
     update_resume_analysis,
     update_job_matching,
+    delete_user_account,
+    export_user_data,
 )
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-secret-key")
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+app.config.from_object(Config)
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
-app.config["DATABASE_PATH"] = os.path.join(app.root_path, "instance", "interview_coach.db")
-MAX_ANSWER_LENGTH = 10000
+MAX_ANSWER_LENGTH = app.config["MAX_ANSWER_LENGTH"]
+app.logger.setLevel(logging.INFO)
+_ai_request_times = {}
 init_database(app)
+
+
+def rate_limited(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        now = time.monotonic()
+        key = (request.remote_addr or "unknown", request.endpoint)
+        recent = [stamp for stamp in _ai_request_times.get(key, []) if now - stamp < 60]
+        if len(recent) >= app.config["MAX_AI_REQUESTS_PER_MINUTE"]:
+            return jsonify({"success": False, "error": "Too many AI requests. Please try again shortly."}), 429
+        recent.append(now)
+        _ai_request_times[key] = recent
+        return view(*args, **kwargs)
+    return wrapped_view
 
 
 def get_current_user():
@@ -145,7 +166,34 @@ def logout():
 @app.route("/profile")
 @login_required
 def profile():
-    return render_template("profile.html", user=get_current_user())
+    user = get_current_user()
+    return render_template("profile.html", user=user, user_counts={"interviews": len(get_user_interviews(user["id"], app)), "resumes": len(get_user_resumes(user["id"], app)), "jobs": len(get_user_jobs(user["id"], app)), "cover_letters": get_user_cover_letter_count(user["id"], app)})
+
+
+@app.route("/export-data")
+@login_required
+def export_data():
+    try:
+        data = export_user_data(session["user_id"], app)
+    except DatabaseError:
+        flash("Your data could not be exported right now.", "error")
+        return redirect(url_for("profile"))
+    return Response(json.dumps(data, indent=2), mimetype="application/json", headers={"Content-Disposition": "attachment; filename=interview-coach-data.json"})
+
+
+@app.route("/delete-account", methods=["POST"])
+@login_required
+def delete_account():
+    if request.form.get("confirmation") != "DELETE":
+        flash("Type DELETE to confirm account deletion.", "error")
+        return redirect(url_for("profile"))
+    try:
+        delete_user_account(session["user_id"], app)
+    except (DatabaseError, ValueError):
+        flash("Your account could not be deleted right now.", "error")
+        return redirect(url_for("profile"))
+    session.clear()
+    return redirect(url_for("home"))
 
 
 def extract_text_from_pdf(file_path):
@@ -176,6 +224,27 @@ def file_too_large(error):
     """Show a useful message when Flask rejects an oversized request."""
     flash("The resume is too large. Please choose a PDF smaller than 5 MB.", "error")
     return redirect(url_for("home"))
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(403)
+def forbidden(error):
+    return render_template("403.html"), 403
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error("Unhandled application error", exc_info=True)
+    return render_template("500.html"), 500
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
 
 
 @app.route("/upload-resume", methods=["POST"])
@@ -227,6 +296,7 @@ def upload_resume():
 
 @app.route("/api/analyze-resume", methods=["POST"])
 @login_required
+@rate_limited
 def analyze_resume_api():
     """
     API endpoint to analyze extracted resume text.
@@ -284,6 +354,7 @@ def analyze_resume_api():
 
 @app.route("/api/analyze-job", methods=["POST"])
 @login_required
+@rate_limited
 def analyze_job_api():
     """
     API endpoint to analyze a job description.
@@ -335,6 +406,7 @@ def analyze_job_api():
 
 @app.route("/api/match-resume", methods=["POST"])
 @login_required
+@rate_limited
 def match_resume_api():
     """
     API endpoint to match resume skills against job requirements.
@@ -397,6 +469,7 @@ def match_resume_api():
 
 @app.route("/api/generate-questions", methods=["POST"])
 @login_required
+@rate_limited
 def generate_questions_api():
     """Generate questions from the analyses and matching data in the session."""
     try:
@@ -490,6 +563,7 @@ def voice_interview():
 
 @app.route("/voice-interview/start", methods=["POST"])
 @login_required
+@rate_limited
 def start_voice_interview():
     interview_type = request.form.get("interview_type", "technical").lower()
     difficulty = request.form.get("difficulty", "medium").lower()
@@ -539,6 +613,7 @@ def practice():
 
 @app.route("/practice/<topic>", methods=["POST"])
 @login_required
+@rate_limited
 def start_practice(topic):
     try:
         analysis = detect_weak_topics(session["user_id"], app)
@@ -598,6 +673,7 @@ def job_detail(job_id):
 
 @app.route("/job-prep", methods=["GET", "POST"])
 @login_required
+@rate_limited
 def job_prep():
     try:
         saved_jobs = get_user_jobs(session["user_id"], app)
@@ -655,6 +731,7 @@ def resumes():
 
 @app.route("/resume-tailor", methods=["GET", "POST"])
 @login_required
+@rate_limited
 def resume_tailor_route():
     try:
         saved_resumes = get_user_resumes(session["user_id"], app)
@@ -759,6 +836,7 @@ def interview():
 
 @app.route("/submit-answer", methods=["POST"])
 @login_required
+@rate_limited
 def submit_answer():
     """Validate and save one answer, then advance to the next question."""
     interview_state = session.get("interview")
@@ -891,7 +969,36 @@ def dashboard():
         weakness_analysis = detect_weak_topics(session["user_id"], app)
     except DatabaseError:
         weakness_analysis = None
-    return render_template("dashboard.html", performance=performance, user_stats=stats, weakness_analysis=weakness_analysis)
+    return render_template("dashboard.html", performance=performance, user_stats=stats, weakness_analysis=weakness_analysis, readiness=_readiness_for_user(performance, saved_interviews))
+
+
+def _readiness_for_user(performance, saved_interviews):
+    try:
+        roadmap_data = _current_roadmap()
+        active_job = roadmap_data.get("job")
+        return calculate_readiness(performance, roadmap_data, saved_interviews, active_job)
+    except DatabaseError:
+        return None
+
+
+@app.route("/readiness", methods=["GET"])
+@login_required
+def readiness():
+    try:
+        saved_interviews = get_user_interviews(session["user_id"], app)
+        if not saved_interviews:
+            return render_template("readiness.html", report=None)
+        latest = get_user_interview(saved_interviews[0]["id"], session["user_id"], app)
+        performance = _performance_for_saved_interview(latest)
+        report = _readiness_for_user(performance, saved_interviews)
+        insight = None
+        analyzer = get_analyzer()
+        if analyzer and report:
+            insight = explain_roadmap({"topics": [], "job": report.get("job")}, analyzer.client, analyzer.model)
+        return render_template("readiness.html", report=report, insight=insight)
+    except DatabaseError:
+        flash("Your readiness report is temporarily unavailable.", "error")
+        return redirect(url_for("home"))
 
 
 def _current_roadmap():
@@ -905,6 +1012,7 @@ def _current_roadmap():
 
 @app.route("/roadmap", methods=["GET"])
 @login_required
+@rate_limited
 def roadmap():
     try:
         result = _current_roadmap()
@@ -1073,4 +1181,4 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=app.config["DEBUG"])

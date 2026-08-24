@@ -81,6 +81,24 @@ def init_database(app=None):
                 """
             )
             connection.execute(
+                """CREATE TABLE IF NOT EXISTS cover_letters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    resume_id INTEGER NOT NULL,
+                    job_id INTEGER NOT NULL,
+                    tailored_resume_id INTEGER,
+                    content TEXT NOT NULL,
+                    tone TEXT NOT NULL,
+                    length TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tailored_resume_id) REFERENCES tailored_resumes(id) ON DELETE SET NULL
+                )"""
+            )
+            connection.execute(
                 """CREATE TABLE IF NOT EXISTS resumes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
@@ -431,6 +449,109 @@ def get_user_tailored_resume(tailored_id, user_id, app=None):
             return dict(row) if row else None
     except sqlite3.Error as error:
         raise DatabaseError("Unable to load the tailored resume.") from error
+
+
+def get_user_cover_letter_count(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return connection.execute("SELECT COUNT(*) FROM cover_letters WHERE user_id = ?", (user_id,)).fetchone()[0]
+    except sqlite3.Error:
+        return 0
+
+
+def get_user_cover_letters(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return [dict(row) for row in connection.execute("SELECT id, job_id, tone, length, created_at, updated_at FROM cover_letters WHERE user_id = ? ORDER BY created_at DESC, id DESC", (user_id,))]
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load cover letters.") from error
+
+
+def create_cover_letter(user_id, resume_id, job_id, content, tone, length, app=None):
+    user_id = _valid_id(user_id)
+    resume_id = _valid_id(resume_id)
+    job_id = _valid_id(job_id)
+    content = _require_text(content, "cover letter")
+    tone = _require_text(tone, "tone")
+    length = _require_text(length, "length")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("INSERT INTO cover_letters (user_id, resume_id, job_id, content, tone, length, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (user_id, resume_id, job_id, content, tone, length, _now(), _now()))
+            return cursor.lastrowid
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save the cover letter.") from error
+
+
+def get_user_cover_letter(letter_id, user_id, app=None):
+    letter_id = _valid_id(letter_id)
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT c.*, j.title AS job_title, j.company_name, r.original_filename FROM cover_letters c JOIN jobs j ON j.id = c.job_id JOIN resumes r ON r.id = c.resume_id WHERE c.id = ? AND c.user_id = ?", (letter_id, user_id)).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load the cover letter.") from error
+
+
+def update_cover_letter(letter_id, user_id, content, app=None):
+    letter_id = _valid_id(letter_id)
+    user_id = _valid_id(user_id)
+    content = _require_text(content, "cover letter")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("UPDATE cover_letters SET content = ?, updated_at = ? WHERE id = ? AND user_id = ?", (content, _now(), letter_id, user_id))
+            return cursor.rowcount == 1
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to update the cover letter.") from error
+
+
+def delete_user_cover_letter(letter_id, user_id, app=None):
+    letter_id = _valid_id(letter_id)
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("DELETE FROM cover_letters WHERE id = ? AND user_id = ?", (letter_id, user_id))
+            return cursor.rowcount == 1
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to delete the cover letter.") from error
+
+
+def export_user_data(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        interviews = get_user_interviews(user_id, app)
+        for interview in interviews:
+            detailed = get_user_interview(interview["id"], user_id, app)
+            interview["questions"] = detailed.get("questions", []) if detailed else []
+        return {"interviews": interviews, "resumes": get_user_resumes(user_id, app), "jobs": get_user_jobs(user_id, app), "tailored_resumes": get_user_tailored_resumes(user_id, app), "cover_letters": get_user_cover_letters(user_id, app)}
+    except (sqlite3.Error, DatabaseError) as error:
+        raise DatabaseError("Unable to export account data.") from error
+
+
+def delete_user_account(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            interview_ids = [row[0] for row in connection.execute("SELECT id FROM interviews WHERE user_id = ?", (user_id,))]
+            for interview_id in interview_ids:
+                question_ids = [row[0] for row in connection.execute("SELECT id FROM questions WHERE interview_id = ?", (interview_id,))]
+                for question_id in question_ids:
+                    connection.execute("DELETE FROM answers WHERE question_id = ?", (question_id,))
+                connection.execute("DELETE FROM questions WHERE interview_id = ?", (interview_id,))
+            connection.execute("DELETE FROM interviews WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM tailored_resumes WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM cover_letters WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM resumes WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM jobs WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            if connection.total_changes < 1:
+                raise ValueError("User not found")
+    except (sqlite3.Error, ValueError) as error:
+        if isinstance(error, ValueError):
+            raise
+        raise DatabaseError("Unable to delete the account.") from error
 
 
 def get_user_jobs(user_id, app=None):
