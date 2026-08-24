@@ -317,6 +317,48 @@ nav a:hover {
     gap: 24px;
 }
 
+.resume-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    margin: 36px 0;
+}
+
+.resume-preview {
+    min-height: 300px;
+    margin: 0;
+    padding: 22px;
+    overflow: auto;
+    color: var(--ink);
+    background: var(--surface);
+    border-top: 3px solid var(--ink);
+    white-space: pre-wrap;
+}
+
+.ats-panel {
+    display: grid;
+    gap: 8px;
+    max-width: 720px;
+    margin-top: 36px;
+    padding: 24px;
+    background: var(--teal);
+}
+
+.ats-panel strong {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.5rem;
+}
+
+.ats-panel small {
+    color: var(--muted);
+}
+
+@media (max-width: 720px) {
+    .resume-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
 .hero {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);

@@ -221,6 +221,31 @@ The detector compares the most recent two interviews with earlier interviews whe
 
 Python handles aggregation, thresholds, trends, and recommendations because those results should be repeatable and testable. The existing AI is reserved for natural-language work: generating focused questions and evaluating answers.
 
+## AI Resume Tailoring (Commit #16)
+
+Resume tailoring combines a user's analyzed resume, a saved target job, resume-job matching, and keyword analysis before asking the existing LLM to improve wording and ordering. The original resume is stored separately and is never overwritten. Tailored versions are stored with the user, source resume, target job, generated content, and estimated ATS score.
+
+```text
+Resume + Job Description
+  |
+  v
+Skill Matching + Keyword Analysis
+  |
+  v
+Truth-preserving AI Rewriting
+  |
+  v
+Tailored Resume Preview and PDF
+```
+
+The anti-hallucination strategy sends the original structured data to the model with explicit instructions not to add skills, employers, projects, certifications, achievements, titles, technologies, or metrics. Python validates the returned skill list against the source resume. Missing skills remain gaps or learning suggestions; they are never presented as experience.
+
+## ATS Compatibility (Commit #16)
+
+The ATS value is an estimate based on required-keyword coverage, overall skill coverage, section structure, and role relevance. Configurable weights are `0.35` for keywords, `0.35` for skills, `0.15` for structure, and `0.15` for relevance. Python calculates the score deterministically so the LLM cannot choose it arbitrarily. It is not a guarantee of any real ATS result; actual systems differ.
+
+The tailoring workflow is available at `/resume-tailor`, with saved versions under `/resumes` and ownership-protected PDF downloads. A missing resume analysis, job, database record, or AI response produces a friendly error without modifying the original document.
+
 ## Job-Specific Interview Preparation (Commit #15)
 
 Analyzed jobs are saved per user in SQLite. Job-specific preparation combines the selected job's requirements and responsibilities, the user's resume analysis, deterministic resume-job matching, previous performance, weak topics, missing concepts, and selected difficulty. Saved jobs are available through `/jobs`; `/job-prep` shows a plan before questions are generated.

@@ -14,13 +14,18 @@ from ai.job_analyzer import get_job_analyzer
 from ai.matcher import match_resume_to_job
 from ai.question_generator import generate_interview_questions
 from ai.answer_evaluator import evaluate_answer
+from ai.resume_tailor import analyze_resume_keywords, calculate_ats_score, tailor_resume
 from analytics.interview_analytics import calculate_interview_performance
 from analytics.weakness_detector import detect_weak_topics
 from analytics.job_preparation import build_job_interview_plan
+from utils.pdf_export import resume_to_pdf
+from flask import Response
 from database.db import (
     DatabaseError,
     create_user,
     create_job,
+    create_resume,
+    create_tailored_resume,
     delete_user_interview,
     get_user_by_email,
     get_user_by_id,
@@ -28,8 +33,13 @@ from database.db import (
     get_user_interviews,
     get_user_job,
     get_user_jobs,
+    get_user_resume,
+    get_user_resumes,
+    get_user_tailored_resume,
+    get_user_tailored_resumes,
     init_database,
     save_completed_interview,
+    update_resume_analysis,
     update_job_matching,
 )
 
@@ -204,6 +214,11 @@ def upload_resume():
 
     uploaded_file.save(save_path)
     extracted_text = extract_text_from_pdf(save_path)
+    if extracted_text:
+        try:
+            session["resume_id"] = create_resume(session["user_id"], safe_filename, extracted_text, app=app)
+        except DatabaseError:
+            flash("The resume was read but could not be saved.", "error")
     flash("Resume uploaded successfully.", "success")
     return render_template("index.html", extracted_text=extracted_text)
 
@@ -244,6 +259,13 @@ def analyze_resume_api():
         if result.get("success"):
             # Store resume analysis in session for matching
             session["resume_analysis"] = result
+            try:
+                if session.get("resume_id"):
+                    update_resume_analysis(session["resume_id"], session["user_id"], result.get("analysis", {}), app)
+                else:
+                    session["resume_id"] = create_resume(session["user_id"], "analyzed-resume", resume_text, result.get("analysis", {}), app)
+            except (DatabaseError, ValueError):
+                return jsonify({"success": False, "error": "The resume was analyzed but could not be saved."}), 500
             session.modified = True
             return jsonify(result), 200
         else:
@@ -566,6 +588,90 @@ def job_prep():
     session["generated_questions"] = questions
     session["generated_interview_config"] = {"interview_type": "job-specific", "difficulty": difficulty, "total_questions": count, "job_id": job["id"], "job_title": job["title"]}
     return render_template("job_plan.html", plan=plan, job=job)
+
+
+@app.route("/resumes", methods=["GET"])
+@login_required
+def resumes():
+    try:
+        saved_resumes = get_user_resumes(session["user_id"], app)
+        tailored = get_user_tailored_resumes(session["user_id"], app)
+    except DatabaseError:
+        flash("Your resume history is temporarily unavailable.", "error")
+        saved_resumes, tailored = [], []
+    return render_template("resumes.html", resumes=saved_resumes, tailored_resumes=tailored)
+
+
+@app.route("/resume-tailor", methods=["GET", "POST"])
+@login_required
+def resume_tailor_route():
+    try:
+        saved_resumes = get_user_resumes(session["user_id"], app)
+        saved_jobs = get_user_jobs(session["user_id"], app)
+    except DatabaseError:
+        flash("Your resume and job history is temporarily unavailable.", "error")
+        return redirect(url_for("home"))
+    if request.method == "GET":
+        return render_template("resume_tailor.html", resumes=saved_resumes, jobs=saved_jobs)
+    try:
+        resume = get_user_resume(request.form.get("resume_id", ""), session["user_id"], app)
+        job = get_user_job(request.form.get("job_id", ""), session["user_id"], app)
+    except (DatabaseError, ValueError):
+        resume, job = None, None
+    if not resume or not job or not resume.get("analyzed_data"):
+        flash("Select an analyzed resume and a saved job first.", "error")
+        return redirect(url_for("resume_tailor_route"))
+    resume_data = resume["analyzed_data"]
+    job_data = job["analyzed_data"]
+    keywords = analyze_resume_keywords(resume_data, job_data)
+    ats = calculate_ats_score(keywords, resume_data, job_data)
+    analyzer = get_analyzer()
+    if not analyzer:
+        flash("AI service is not configured. Please set OPENAI_API_KEY.", "error")
+        return redirect(url_for("resume_tailor_route"))
+    result = tailor_resume(resume_data, job_data, keywords, analyzer.client, analyzer.model)
+    if not result.get("success"):
+        flash(result.get("error", "Unable to tailor the resume."), "error")
+        return redirect(url_for("resume_tailor_route"))
+    try:
+        tailored_id = create_tailored_resume(session["user_id"], resume["id"], job["id"], json.dumps(result["tailored"]), ats["score"], app)
+    except (DatabaseError, ValueError):
+        flash("The tailored resume could not be saved.", "error")
+        return redirect(url_for("resume_tailor_route"))
+    return render_template("resume_tailor_preview.html", original=resume_data, tailored=result["tailored"], keywords=keywords, ats=ats, job=job, tailored_id=tailored_id)
+
+
+@app.route("/resume-tailor/<tailored_id>", methods=["GET"])
+@login_required
+def tailored_resume_detail(tailored_id):
+    try:
+        tailored = get_user_tailored_resume(tailored_id, session["user_id"], app)
+    except (DatabaseError, ValueError):
+        tailored = None
+    if not tailored:
+        return render_template("interview_not_found.html"), 404
+    try:
+        tailored["content"] = json.loads(tailored["content"])
+    except json.JSONDecodeError:
+        return render_template("interview_not_found.html"), 404
+    return render_template("resume_tailor_detail.html", tailored=tailored)
+
+
+@app.route("/resume-tailor/<tailored_id>/download", methods=["GET"])
+@login_required
+def download_tailored_resume(tailored_id):
+    try:
+        tailored = get_user_tailored_resume(tailored_id, session["user_id"], app)
+    except (DatabaseError, ValueError):
+        tailored = None
+    if not tailored:
+        return render_template("interview_not_found.html"), 404
+    try:
+        content = json.loads(tailored["content"])
+        pdf = resume_to_pdf(content)
+    except (json.JSONDecodeError, TypeError):
+        return render_template("interview_not_found.html"), 404
+    return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": "attachment; filename=tailored-resume.pdf"})
 
 
 @app.route("/job-prep/start", methods=["POST"])

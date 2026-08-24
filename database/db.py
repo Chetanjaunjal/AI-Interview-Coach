@@ -79,6 +79,31 @@ def init_database(app=None):
                 """
             )
             connection.execute(
+                """CREATE TABLE IF NOT EXISTS resumes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    original_filename TEXT,
+                    extracted_text TEXT NOT NULL,
+                    analyzed_data TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )"""
+            )
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS tailored_resumes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    resume_id INTEGER NOT NULL,
+                    job_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    ats_score REAL NOT NULL CHECK (ats_score BETWEEN 0 AND 100),
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+                )"""
+            )
+            connection.execute(
                 """CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -313,6 +338,92 @@ def create_job(user_id, title, company_name, description, analyzed_data, app=Non
             return cursor.lastrowid
     except sqlite3.Error as error:
         raise DatabaseError("Unable to save the job.") from error
+
+
+def create_resume(user_id, original_filename, extracted_text, analyzed_data=None, app=None):
+    user_id = _valid_id(user_id)
+    text = _require_text(extracted_text, "resume text")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("INSERT INTO resumes (user_id, original_filename, extracted_text, analyzed_data, created_at) VALUES (?, ?, ?, ?, ?)", (user_id, str(original_filename or "").strip() or None, text, json.dumps(analyzed_data) if isinstance(analyzed_data, dict) else None, _now()))
+            return cursor.lastrowid
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save the resume.") from error
+
+
+def update_resume_analysis(resume_id, user_id, analyzed_data, app=None):
+    resume_id = _valid_id(resume_id)
+    user_id = _valid_id(user_id)
+    if not isinstance(analyzed_data, dict):
+        raise ValueError("Invalid resume analysis")
+    try:
+        with get_db_connection(app) as connection:
+            connection.execute("UPDATE resumes SET analyzed_data = ? WHERE id = ? AND user_id = ?", (json.dumps(analyzed_data), resume_id, user_id))
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save resume analysis.") from error
+
+
+def get_user_resumes(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return [dict(row) for row in connection.execute("SELECT id, user_id, original_filename, created_at, analyzed_data IS NOT NULL AS analyzed FROM resumes WHERE user_id = ? ORDER BY created_at DESC, id DESC", (user_id,))]
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load resumes.") from error
+
+
+def get_user_resume(resume_id, user_id, app=None):
+    resume_id = _valid_id(resume_id)
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT * FROM resumes WHERE id = ? AND user_id = ?", (resume_id, user_id)).fetchone()
+            if not row:
+                return None
+            resume = dict(row)
+            resume["analyzed_data"] = json.loads(resume["analyzed_data"]) if resume.get("analyzed_data") else {}
+            return resume
+    except (sqlite3.Error, json.JSONDecodeError) as error:
+        raise DatabaseError("Unable to load the resume.") from error
+
+
+def create_tailored_resume(user_id, resume_id, job_id, content, ats_score, app=None):
+    user_id = _valid_id(user_id)
+    resume_id = _valid_id(resume_id)
+    job_id = _valid_id(job_id)
+    content = _require_text(content, "tailored resume content")
+    try:
+        score = float(ats_score)
+    except (TypeError, ValueError) as error:
+        raise ValueError("ats_score must be between 0 and 100") from error
+    if not 0 <= score <= 100:
+        raise ValueError("ats_score must be between 0 and 100")
+    try:
+        with get_db_connection(app) as connection:
+            cursor = connection.execute("INSERT INTO tailored_resumes (user_id, resume_id, job_id, content, ats_score, created_at) VALUES (?, ?, ?, ?, ?, ?)", (user_id, resume_id, job_id, content, score, _now()))
+            return cursor.lastrowid
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to save the tailored resume.") from error
+
+
+def get_user_tailored_resumes(user_id, app=None):
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            return [dict(row) for row in connection.execute("SELECT t.*, r.original_filename, j.title AS job_title FROM tailored_resumes t JOIN resumes r ON r.id = t.resume_id JOIN jobs j ON j.id = t.job_id WHERE t.user_id = ? ORDER BY t.created_at DESC, t.id DESC", (user_id,))]
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load tailored resumes.") from error
+
+
+def get_user_tailored_resume(tailored_id, user_id, app=None):
+    tailored_id = _valid_id(tailored_id)
+    user_id = _valid_id(user_id)
+    try:
+        with get_db_connection(app) as connection:
+            row = connection.execute("SELECT t.*, r.original_filename, j.title AS job_title FROM tailored_resumes t JOIN resumes r ON r.id = t.resume_id JOIN jobs j ON j.id = t.job_id WHERE t.id = ? AND t.user_id = ?", (tailored_id, user_id)).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as error:
+        raise DatabaseError("Unable to load the tailored resume.") from error
 
 
 def get_user_jobs(user_id, app=None):
