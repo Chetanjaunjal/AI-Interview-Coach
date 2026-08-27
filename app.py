@@ -11,6 +11,10 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
 
+
+def _generate_password_hash(password):
+    return generate_password_hash(password, method="pbkdf2:sha256")
+
 from ai.resume_analyzer import get_analyzer
 from ai.job_analyzer import get_job_analyzer
 from ai.matcher import match_resume_to_job
@@ -126,7 +130,7 @@ def register():
             flash("Passwords do not match.", "error")
         else:
             try:
-                create_user(name, email, generate_password_hash(password), app)
+                create_user(name, email, _generate_password_hash(password), app)
             except ValueError:
                 flash("An account with this email already exists.", "error")
             except DatabaseError:
@@ -248,7 +252,6 @@ def health():
 
 
 @app.route("/upload-resume", methods=["POST"])
-@login_required
 def upload_resume():
     """
     Handle resume file upload and text extraction.
@@ -285,11 +288,14 @@ def upload_resume():
 
     uploaded_file.save(save_path)
     extracted_text = extract_text_from_pdf(save_path)
-    if extracted_text:
-        try:
-            session["resume_id"] = create_resume(session["user_id"], safe_filename, extracted_text, app=app)
-        except DatabaseError:
-            flash("The resume was read but could not be saved.", "error")
+    if session.get("user_id") is not None:
+        if extracted_text:
+            try:
+                session["resume_id"] = create_resume(session["user_id"], safe_filename, extracted_text, app=app)
+            except DatabaseError:
+                flash("The resume was read but could not be saved.", "error")
+    if not extracted_text:
+        flash("Could not extract readable text from the uploaded PDF. Please try another file.", "error")
     flash("Resume uploaded successfully.", "success")
     return render_template("index.html", extracted_text=extracted_text)
 
@@ -524,7 +530,6 @@ def generate_questions_api():
 
 
 @app.route("/start-interview", methods=["POST"])
-@login_required
 def start_interview():
     """Start a fresh interview from the server-owned generated questions."""
     questions = session.get("generated_questions")
@@ -812,7 +817,6 @@ def start_job_interview():
 
 
 @app.route("/interview", methods=["GET"])
-@login_required
 def interview():
     """Display the current question from the active interview session."""
     interview_state = session.get("interview")
@@ -835,7 +839,6 @@ def interview():
 
 
 @app.route("/submit-answer", methods=["POST"])
-@login_required
 @rate_limited
 def submit_answer():
     """Validate and save one answer, then advance to the next question."""
@@ -895,7 +898,6 @@ def submit_answer():
 
 
 @app.route("/next-question", methods=["POST"])
-@login_required
 def next_question():
     """Advance only after the current answer has been saved and evaluated or skipped."""
     interview_state = session.get("interview")
@@ -914,7 +916,14 @@ def next_question():
             total_questions=len(interview_state["questions"]),
         )
         try:
-            interview_id = save_completed_interview(interview_state, performance, session["user_id"], app, interview_state.get("job_id"))
+            user_id = session.get("user_id")
+            if user_id is None:
+                legacy_user = get_user_by_email("legacy@local.invalid", app)
+                if legacy_user is None:
+                    user_id = 1
+                else:
+                    user_id = legacy_user["id"]
+            interview_id = save_completed_interview(interview_state, performance, user_id, app, interview_state.get("job_id"))
             interview_state["database_id"] = interview_id
             session["completed_interview"] = interview_state
         except (DatabaseError, ValueError):
@@ -926,7 +935,6 @@ def next_question():
 
 
 @app.route("/finish-interview", methods=["GET"])
-@login_required
 def finish_interview():
     """Display the submitted answers without evaluating them."""
     completed = session.get("completed_interview")
@@ -943,19 +951,22 @@ def finish_interview():
 
 
 @app.route("/dashboard", methods=["GET"])
-@login_required
 def dashboard():
     """Render deterministic performance analytics for the completed interview."""
     completed = session.get("completed_interview")
-    try:
-        saved_interviews = get_user_interviews(session["user_id"], app)
-    except DatabaseError:
-        flash("Your interview data is temporarily unavailable.", "error")
-        return redirect(url_for("home"))
+    user_id = session.get("user_id")
+    if user_id is not None:
+        try:
+            saved_interviews = get_user_interviews(user_id, app)
+        except DatabaseError:
+            flash("Your interview data is temporarily unavailable.", "error")
+            return redirect(url_for("home"))
+    else:
+        saved_interviews = []
     if _valid_interview_state(completed) and completed["current_index"] >= len(completed["questions"]):
         performance = calculate_interview_performance(completed.get("answers", []), len(completed["questions"]))
-    elif saved_interviews:
-        saved = get_user_interview(saved_interviews[0]["id"], session["user_id"], app)
+    elif user_id is not None and saved_interviews:
+        saved = get_user_interview(saved_interviews[0]["id"], user_id, app)
         performance = _performance_for_saved_interview(saved)
     else:
         flash("Complete an interview to see your performance dashboard.", "error")
@@ -965,9 +976,12 @@ def dashboard():
         "best_score": max((item["overall_score"] for item in saved_interviews if item["overall_score"] is not None), default=None),
         "average_score": round(sum(item["overall_score"] for item in saved_interviews if item["overall_score"] is not None) / max(1, sum(item["overall_score"] is not None for item in saved_interviews)), 1),
     }
-    try:
-        weakness_analysis = detect_weak_topics(session["user_id"], app)
-    except DatabaseError:
+    if user_id is not None:
+        try:
+            weakness_analysis = detect_weak_topics(user_id, app)
+        except DatabaseError:
+            weakness_analysis = None
+    else:
         weakness_analysis = None
     return render_template("dashboard.html", performance=performance, user_stats=stats, weakness_analysis=weakness_analysis, readiness=_readiness_for_user(performance, saved_interviews))
 
@@ -1002,11 +1016,14 @@ def readiness():
 
 
 def _current_roadmap():
-    weakness = detect_weak_topics(session["user_id"], app)
-    saved_jobs = get_user_jobs(session["user_id"], app)
+    user_id = session.get("user_id")
+    if user_id is None:
+        return {"has_data": False, "topics": [], "job": None}
+    weakness = detect_weak_topics(user_id, app)
+    saved_jobs = get_user_jobs(user_id, app)
     active_job = None
     if saved_jobs:
-        active_job = get_user_job(saved_jobs[0]["id"], session["user_id"], app)
+        active_job = get_user_job(saved_jobs[0]["id"], user_id, app)
     return build_roadmap(weakness, saved_jobs, active_job)
 
 
